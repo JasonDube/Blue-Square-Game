@@ -1,0 +1,125 @@
+"""
+HUD (Heads-Up Display) component
+"""
+import pygame
+from constants import *
+
+
+class HUD:
+    """Displays game information like day/time and sheep count"""
+    
+    def __init__(self):
+        self.font = pygame.font.Font(None, 24)
+        self.bar_height = 25
+    
+    def draw(self, screen, game_state, day_cycle, resource_system):
+        """Draw the HUD bar at top of screen"""
+        # Draw black bar background
+        pygame.draw.rect(screen, BLACK, (0, 0, SCREEN_WIDTH, self.bar_height))
+        pygame.draw.rect(screen, WHITE, (0, 0, SCREEN_WIDTH, self.bar_height), 1)
+        
+        # Draw sheep counter on left
+        self._draw_sheep_counter(screen, game_state)
+        
+        # Draw resources (logs, stone, etc.) in middle-left
+        self._draw_resources(screen, resource_system)
+        
+        # Draw day/time on right
+        self._draw_day_time(screen, day_cycle)
+    
+    def _draw_sheep_counter(self, screen, game_state):
+        """Draw sheep icon and count"""
+        # Draw sheep icon (same size as actual sheep: 6x4)
+        sheep_icon_x = 10
+        sheep_icon_y = (self.bar_height - 4) // 2
+        pygame.draw.ellipse(screen, WHITE, (sheep_icon_x, sheep_icon_y, 6, 4))
+        
+        # Draw count number
+        sheep_count_text = str(len(game_state.sheep_list))
+        count_surface = self.font.render(sheep_count_text, True, WHITE)
+        count_x = sheep_icon_x + 10
+        screen.blit(count_surface, (count_x, self.bar_height // 2 - count_surface.get_height() // 2))
+    
+    def _draw_resources(self, screen, resource_system):
+        """Draw resource icons and counts"""
+        from systems.resource_system import ResourceType, ResourceVisualizer
+        
+        # Start position after sheep counter
+        start_x = 60
+        current_x = start_x
+        
+        # Resource display order
+        resources_to_show = [
+            (ResourceType.LOG, "Logs"),
+            (ResourceType.STONE, "Stone"),
+            (ResourceType.WOOL, "Wool"),
+            (ResourceType.MEAT, "Meat")
+        ]
+        
+        for resource_type, label in resources_to_show:
+            count = resource_system.get_resource_count(resource_type)
+            
+            # Only show if we have any of this resource
+            if count > 0:
+                visual = ResourceVisualizer.get_resource_visual(resource_type)
+                
+                # Draw resource icon (scaled down to fit in HUD)
+                icon_y = (self.bar_height - visual['height']) // 2
+                
+                if visual['shape'] == 'rect':
+                    # Draw small rectangle icon
+                    pygame.draw.rect(screen, visual['color'], 
+                                   (current_x, icon_y, visual['width'], visual['height']))
+                elif visual['shape'] == 'circle':
+                    radius = visual['width'] // 2
+                    pygame.draw.circle(screen, visual['color'], 
+                                     (current_x + radius, icon_y + radius), radius)
+                
+                # Draw count next to icon
+                count_text = str(count)
+                count_surface = self.font.render(count_text, True, WHITE)
+                count_x = current_x + visual['width'] + 5
+                screen.blit(count_surface, (count_x, self.bar_height // 2 - count_surface.get_height() // 2))
+                
+                # Move to next resource position
+                current_x += visual['width'] + count_surface.get_width() + 20
+    
+    def _draw_day_time(self, screen, day_cycle):
+        """Draw day number and current time"""
+        display_hour, current_minute, am_pm = day_cycle.get_time_of_day()
+        day_text = f"Day {day_cycle.current_day}: {display_hour}:{current_minute:02d} {am_pm}"
+        
+        day_surface = self.font.render(day_text, True, WHITE)
+        day_rect = day_surface.get_rect()
+        day_x = SCREEN_WIDTH - day_rect.width - 10
+        screen.blit(day_surface, (day_x, self.bar_height // 2 - day_rect.height // 2))
+    
+    def draw_box_selection(self, screen, game_state):
+        """Draw box selection rectangle"""
+        if not game_state.box_selecting:
+            return
+        
+        rect_x = min(game_state.box_start_x, game_state.box_end_x)
+        rect_y = min(game_state.box_start_y, game_state.box_end_y)
+        rect_width = abs(game_state.box_end_x - game_state.box_start_x)
+        rect_height = abs(game_state.box_end_y - game_state.box_start_y)
+        
+        pygame.draw.rect(screen, YELLOW, (rect_x, rect_y, rect_width, rect_height), 1)
+    
+    def draw_debug_herd_boundary(self, screen, game_state):
+        """Draw herd boundary in debug mode"""
+        if not game_state.debug_mode or len(game_state.sheep_list) == 0:
+            return
+        
+        herd_center_x, herd_center_y = game_state.get_herd_center()
+        
+        boundary_rect = pygame.Rect(
+            herd_center_x - HERD_BOUNDARY_SIZE // 2,
+            herd_center_y - HERD_BOUNDARY_SIZE // 2,
+            HERD_BOUNDARY_SIZE,
+            HERD_BOUNDARY_SIZE
+        )
+        pygame.draw.rect(screen, YELLOW, boundary_rect, 1)
+        
+        # Draw center point
+        pygame.draw.circle(screen, RED, (int(herd_center_x), int(herd_center_y)), 3)
