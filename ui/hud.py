@@ -24,6 +24,9 @@ class HUD:
         # Draw human counters after sheep
         self._draw_human_counters(screen, game_state)
         
+        # Draw average happiness (heart icon)
+        self._draw_average_happiness(screen, game_state)
+        
         # Draw resources (logs, stone, etc.) in middle-left
         self._draw_resources(screen, resource_system)
         
@@ -78,15 +81,55 @@ class HUD:
         female_count_x = female_icon_x + icon_size + 5
         screen.blit(female_count_surface, (female_count_x, self.bar_height // 2 - female_count_surface.get_height() // 2))
         
-        # Update start position for resources
+        # Update start position for next element
         self._human_counters_end_x = female_count_x + female_count_surface.get_width() + 15
+    
+    def _draw_average_happiness(self, screen, game_state):
+        """Draw heart icon with average happiness of all humans"""
+        if len(game_state.human_list) == 0:
+            self._happiness_end_x = self._human_counters_end_x if hasattr(self, '_human_counters_end_x') else 60
+            return
+        
+        # Calculate average happiness
+        total_happiness = sum(h.get_effective_happiness() for h in game_state.human_list)
+        avg_happiness = int(total_happiness / len(game_state.human_list))
+        
+        # Position after human counters
+        start_x = self._human_counters_end_x if hasattr(self, '_human_counters_end_x') else 60
+        heart_x = start_x
+        heart_y = self.bar_height // 2
+        heart_size = 12  # Size of heart icon
+        
+        # Draw simple heart icon (two circles + triangle)
+        # Top circles
+        radius = heart_size // 4
+        pygame.draw.circle(screen, RED, (heart_x + radius, heart_y - radius), radius)
+        pygame.draw.circle(screen, RED, (heart_x + heart_size - radius, heart_y - radius), radius)
+        # Bottom triangle (inverted)
+        points = [
+            (heart_x, heart_y - radius),
+            (heart_x + heart_size // 2, heart_y + radius),
+            (heart_x + heart_size, heart_y - radius)
+        ]
+        pygame.draw.polygon(screen, RED, points)
+        
+        # Draw happiness number
+        happiness_text = str(avg_happiness)
+        happiness_surface = self.font.render(happiness_text, True, WHITE)
+        happiness_x = heart_x + heart_size + 5
+        screen.blit(happiness_surface, (happiness_x, self.bar_height // 2 - happiness_surface.get_height() // 2))
+        
+        # Update end position for resources
+        self._happiness_end_x = happiness_x + happiness_surface.get_width() + 15
     
     def _draw_resources(self, screen, resource_system):
         """Draw resource icons and counts"""
         from systems.resource_system import ResourceType, ResourceVisualizer
         
-        # Start position after human counters (or sheep counter if no humans method called)
-        if hasattr(self, '_human_counters_end_x'):
+        # Start position after human counters/happiness (or sheep counter if no humans method called)
+        if hasattr(self, '_happiness_end_x'):
+            start_x = self._happiness_end_x
+        elif hasattr(self, '_human_counters_end_x'):
             start_x = self._human_counters_end_x
         else:
             start_x = 60
@@ -97,6 +140,7 @@ class HUD:
             (ResourceType.LOG, "Logs"),
             (ResourceType.STONE, "Stone"),
             (ResourceType.IRON, "Iron"),
+            (ResourceType.SALT, "Salt"),
             (ResourceType.WOOL, "Wool"),
             (ResourceType.MEAT, "Meat")
         ]
@@ -104,8 +148,8 @@ class HUD:
         for resource_type, label in resources_to_show:
             count = resource_system.get_resource_count(resource_type)
             
-            # Always show resources (even if 0) for LOG, STONE, IRON
-            if resource_type in [ResourceType.LOG, ResourceType.STONE, ResourceType.IRON] or count > 0:
+            # Always show resources (even if 0) for LOG, STONE, IRON, SALT
+            if resource_type in [ResourceType.LOG, ResourceType.STONE, ResourceType.IRON, ResourceType.SALT] or count > 0:
                 visual = ResourceVisualizer.get_resource_visual(resource_type)
                 
                 # Draw resource icon (scaled down to fit in HUD)

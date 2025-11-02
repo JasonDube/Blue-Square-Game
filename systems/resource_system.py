@@ -9,6 +9,7 @@ class ResourceType:
     LOG = "log"
     STONE = "stone"
     IRON = "iron"
+    SALT = "salt"
     WOOL = "wool"
     MEAT = "meat"
 
@@ -22,6 +23,7 @@ class ResourceSystem:
             ResourceType.LOG: 0,
             ResourceType.STONE: 0,
             ResourceType.IRON: 0,
+            ResourceType.SALT: 0,
             ResourceType.WOOL: 0,
             ResourceType.MEAT: 0
         }
@@ -75,6 +77,12 @@ class ResourceVisualizer:
             'height': 12,
             'color': (200, 100, 50),  # Orange-brown for iron ore
             'shape': 'rect'
+        },
+        ResourceType.SALT: {
+            'width': 6,
+            'height': 6,
+            'color': WHITE,
+            'shape': 'circle'
         },
         ResourceType.WOOL: {
             'width': 6,

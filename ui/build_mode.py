@@ -8,6 +8,7 @@ from entities.townhall import TownHall
 from entities.lumberyard import LumberYard
 from entities.stoneyard import StoneYard
 from entities.ironyard import IronYard
+from entities.saltyard import SaltYard
 from entities.hut import Hut
 
 
@@ -38,6 +39,8 @@ class BuildModeRenderer:
             self._draw_stoneyard_preview(screen, mouse_x, mouse_y, game_state.pen_rotation, is_valid)
         elif game_state.build_mode_type == "ironyard":
             self._draw_ironyard_preview(screen, mouse_x, mouse_y, game_state.pen_rotation, is_valid)
+        elif game_state.build_mode_type == "saltyard":
+            self._draw_saltyard_preview(screen, mouse_x, mouse_y, game_state.pen_rotation, is_valid)
         elif game_state.build_mode_type == "hut":
             self._draw_hut_preview(screen, mouse_x, mouse_y, is_valid)
         
@@ -54,25 +57,56 @@ class BuildModeRenderer:
             preview_x = mouse_x - PEN_SIZE // 2
             preview_y = mouse_y - PEN_SIZE // 2
         elif build_type == "townhall":
-            width = TOWNHALL_WIDTH
-            height = TOWNHALL_HEIGHT
-            preview_x = mouse_x - TOWNHALL_WIDTH // 2
-            preview_y = mouse_y - TOWNHALL_HEIGHT // 2
+            # Account for rotation - swap dimensions for 90/270 degree rotations
+            rotation = game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                width = TOWNHALL_HEIGHT
+                height = TOWNHALL_WIDTH
+            else:
+                width = TOWNHALL_WIDTH
+                height = TOWNHALL_HEIGHT
+            preview_x = mouse_x - width // 2
+            preview_y = mouse_y - height // 2
         elif build_type == "lumberyard":
-            width = LUMBERYARD_WIDTH
-            height = LUMBERYARD_HEIGHT
-            preview_x = mouse_x - LUMBERYARD_WIDTH // 2
-            preview_y = mouse_y - LUMBERYARD_HEIGHT // 2
+            rotation = game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                width = LUMBERYARD_HEIGHT
+                height = LUMBERYARD_WIDTH
+            else:
+                width = LUMBERYARD_WIDTH
+                height = LUMBERYARD_HEIGHT
+            preview_x = mouse_x - width // 2
+            preview_y = mouse_y - height // 2
         elif build_type == "stoneyard":
-            width = STONEYARD_WIDTH
-            height = STONEYARD_HEIGHT
-            preview_x = mouse_x - STONEYARD_WIDTH // 2
-            preview_y = mouse_y - STONEYARD_HEIGHT // 2
+            rotation = game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                width = STONEYARD_HEIGHT
+                height = STONEYARD_WIDTH
+            else:
+                width = STONEYARD_WIDTH
+                height = STONEYARD_HEIGHT
+            preview_x = mouse_x - width // 2
+            preview_y = mouse_y - height // 2
         elif build_type == "ironyard":
-            width = IRONYARD_WIDTH
-            height = IRONYARD_HEIGHT
-            preview_x = mouse_x - IRONYARD_WIDTH // 2
-            preview_y = mouse_y - IRONYARD_HEIGHT // 2
+            rotation = game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                width = IRONYARD_HEIGHT
+                height = IRONYARD_WIDTH
+            else:
+                width = IRONYARD_WIDTH
+                height = IRONYARD_HEIGHT
+            preview_x = mouse_x - width // 2
+            preview_y = mouse_y - height // 2
+        elif build_type == "saltyard":
+            rotation = game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                width = SALTYARD_HEIGHT
+                height = SALTYARD_WIDTH
+            else:
+                width = SALTYARD_WIDTH
+                height = SALTYARD_HEIGHT
+            preview_x = mouse_x - width // 2
+            preview_y = mouse_y - height // 2
         elif build_type == "hut":
             width = HUT_SIZE
             height = HUT_SIZE
@@ -139,6 +173,12 @@ class BuildModeRenderer:
             if building_rect.colliderect(iron_rect):
                 return False
         
+        # Check collision with salt yards
+        for salt_yard in game_state.salt_yard_list:
+            salt_rect = pygame.Rect(salt_yard.x, salt_yard.y, salt_yard.width, salt_yard.height)
+            if building_rect.colliderect(salt_rect):
+                return False
+        
         # Check collision with huts (circular, but check bounding box)
         for hut in game_state.hut_list:
             hut_rect = pygame.Rect(hut.x, hut.y, hut.size, hut.size)
@@ -164,78 +204,106 @@ class BuildModeRenderer:
         pygame.draw.line(screen, color, (preview_x + PEN_SIZE, preview_y), (preview_x + PEN_SIZE, preview_y + PEN_SIZE), 2)
         pygame.draw.line(screen, color, (preview_x + PEN_SIZE, preview_y + PEN_SIZE), (preview_x, preview_y + PEN_SIZE), 2)
         pygame.draw.line(screen, color, (preview_x, preview_y + PEN_SIZE), (preview_x, preview_y), 2)
-        
-        # Draw button position indicator
-        preview_pen = Pen(preview_x, preview_y, PEN_SIZE, rotation)
-        button_x, button_y = preview_pen.get_button_pos()
-        pygame.draw.circle(screen, color, (button_x, button_y), 5)
     
     def _draw_townhall_preview(self, screen, mouse_x, mouse_y, rotation, is_valid):
         """Draw preview of town hall placement"""
-        preview_x = mouse_x - TOWNHALL_WIDTH // 2
-        preview_y = mouse_y - TOWNHALL_HEIGHT // 2
+        # For rotations 1 and 3 (90 and 270 degrees), swap width and height
+        if rotation == 1 or rotation == 3:
+            draw_width = TOWNHALL_HEIGHT
+            draw_height = TOWNHALL_WIDTH
+        else:
+            draw_width = TOWNHALL_WIDTH
+            draw_height = TOWNHALL_HEIGHT
+        
+        preview_x = mouse_x - draw_width // 2
+        preview_y = mouse_y - draw_height // 2
         
         # Keep within playable area bounds
-        preview_x = max(0, min(preview_x, SCREEN_WIDTH - TOWNHALL_WIDTH))
-        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - TOWNHALL_HEIGHT))
+        preview_x = max(0, min(preview_x, SCREEN_WIDTH - draw_width))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - draw_height))
         
         # Choose color based on validity
         color = GRAY if is_valid else RED
         
-        # Draw filled rectangle
-        pygame.draw.rect(screen, color, (preview_x, preview_y, TOWNHALL_WIDTH, TOWNHALL_HEIGHT))
-        pygame.draw.rect(screen, BLACK, (preview_x, preview_y, TOWNHALL_WIDTH, TOWNHALL_HEIGHT), 2)
-        
-        # Draw button position indicator
-        preview_townhall = TownHall(preview_x, preview_y, rotation)
-        button_x, button_y = preview_townhall.get_button_pos()
-        pygame.draw.circle(screen, color, (button_x, button_y), 5)
+        # Draw filled rectangle with rotated dimensions
+        pygame.draw.rect(screen, color, (preview_x, preview_y, draw_width, draw_height))
+        pygame.draw.rect(screen, BLACK, (preview_x, preview_y, draw_width, draw_height), 2)
     
     def _draw_lumberyard_preview(self, screen, mouse_x, mouse_y, rotation, is_valid):
         """Draw preview of lumber yard placement"""
-        preview_x = mouse_x - LUMBERYARD_WIDTH // 2
-        preview_y = mouse_y - LUMBERYARD_HEIGHT // 2
+        # For rotations 1 and 3 (90 and 270 degrees), swap width and height
+        if rotation == 1 or rotation == 3:
+            draw_width = LUMBERYARD_HEIGHT
+            draw_height = LUMBERYARD_WIDTH
+        else:
+            draw_width = LUMBERYARD_WIDTH
+            draw_height = LUMBERYARD_HEIGHT
+        
+        preview_x = mouse_x - draw_width // 2
+        preview_y = mouse_y - draw_height // 2
         
         # Keep within playable area bounds
-        preview_x = max(0, min(preview_x, SCREEN_WIDTH - LUMBERYARD_WIDTH))
-        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - LUMBERYARD_HEIGHT))
+        preview_x = max(0, min(preview_x, SCREEN_WIDTH - draw_width))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - draw_height))
         
         # Choose color based on validity
         color = GRAY if is_valid else RED
         
-        # Draw filled rectangle
-        pygame.draw.rect(screen, color, (preview_x, preview_y, LUMBERYARD_WIDTH, LUMBERYARD_HEIGHT))
-        pygame.draw.rect(screen, BLACK, (preview_x, preview_y, LUMBERYARD_WIDTH, LUMBERYARD_HEIGHT), 2)
-        
-        # Draw button position indicator
-        preview_lumberyard = LumberYard(preview_x, preview_y, rotation)
-        button_x, button_y = preview_lumberyard.get_button_pos()
-        pygame.draw.circle(screen, color, (button_x, button_y), 5)
+        # Draw filled rectangle with rotated dimensions
+        pygame.draw.rect(screen, color, (preview_x, preview_y, draw_width, draw_height))
+        pygame.draw.rect(screen, BLACK, (preview_x, preview_y, draw_width, draw_height), 2)
     
     def _draw_stoneyard_preview(self, screen, mouse_x, mouse_y, rotation, is_valid):
         """Draw preview of stone yard placement"""
-        preview_x = mouse_x - STONEYARD_WIDTH // 2
-        preview_y = mouse_y - STONEYARD_HEIGHT // 2
+        # For rotations 1 and 3 (90 and 270 degrees), swap width and height
+        if rotation == 1 or rotation == 3:
+            draw_width = STONEYARD_HEIGHT
+            draw_height = STONEYARD_WIDTH
+        else:
+            draw_width = STONEYARD_WIDTH
+            draw_height = STONEYARD_HEIGHT
+        
+        preview_x = mouse_x - draw_width // 2
+        preview_y = mouse_y - draw_height // 2
         
         # Keep within playable area bounds
-        preview_x = max(0, min(preview_x, SCREEN_WIDTH - STONEYARD_WIDTH))
-        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - STONEYARD_HEIGHT))
+        preview_x = max(0, min(preview_x, SCREEN_WIDTH - draw_width))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - draw_height))
         
         # Choose color based on validity
         color = GRAY if is_valid else RED
         
-        # Draw filled rectangle
-        pygame.draw.rect(screen, color, (preview_x, preview_y, STONEYARD_WIDTH, STONEYARD_HEIGHT))
-        pygame.draw.rect(screen, BLACK, (preview_x, preview_y, STONEYARD_WIDTH, STONEYARD_HEIGHT), 2)
+        # Draw filled rectangle with rotated dimensions
+        pygame.draw.rect(screen, color, (preview_x, preview_y, draw_width, draw_height))
+        pygame.draw.rect(screen, BLACK, (preview_x, preview_y, draw_width, draw_height), 2)
+    
+    def _draw_saltyard_preview(self, screen, mouse_x, mouse_y, rotation, is_valid):
+        """Draw preview of salt yard placement"""
+        # For rotations 1 and 3 (90 and 270 degrees), swap width and height
+        if rotation == 1 or rotation == 3:
+            draw_width = SALTYARD_HEIGHT
+            draw_height = SALTYARD_WIDTH
+        else:
+            draw_width = SALTYARD_WIDTH
+            draw_height = SALTYARD_HEIGHT
         
-        # Draw button position indicator
-        preview_stoneyard = StoneYard(preview_x, preview_y, rotation)
-        button_x, button_y = preview_stoneyard.get_button_pos()
-        pygame.draw.circle(screen, color, (button_x, button_y), 5)
+        preview_x = mouse_x - draw_width // 2
+        preview_y = mouse_y - draw_height // 2
+        
+        # Keep within playable area bounds
+        preview_x = max(0, min(preview_x, SCREEN_WIDTH - draw_width))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - draw_height))
+        
+        # Choose color based on validity
+        color = WHITE if is_valid else RED
+        
+        # Draw filled white rectangle with rotated dimensions
+        pygame.draw.rect(screen, color, (preview_x, preview_y, draw_width, draw_height))
+        pygame.draw.rect(screen, BLACK, (preview_x, preview_y, draw_width, draw_height), 2)
     
     def _draw_hut_preview(self, screen, mouse_x, mouse_y, is_valid):
         """Draw hut preview"""
-        preview_color = GREEN if is_valid else RED
+        preview_color = WHITE if is_valid else RED
         
         # Clamp position to playable area
         preview_x = mouse_x - HUT_SIZE // 2
@@ -260,24 +328,27 @@ class BuildModeRenderer:
     
     def _draw_ironyard_preview(self, screen, mouse_x, mouse_y, rotation, is_valid):
         """Draw preview of iron yard placement"""
-        preview_x = mouse_x - IRONYARD_WIDTH // 2
-        preview_y = mouse_y - IRONYARD_HEIGHT // 2
+        # For rotations 1 and 3 (90 and 270 degrees), swap width and height
+        if rotation == 1 or rotation == 3:
+            draw_width = IRONYARD_HEIGHT
+            draw_height = IRONYARD_WIDTH
+        else:
+            draw_width = IRONYARD_WIDTH
+            draw_height = IRONYARD_HEIGHT
+        
+        preview_x = mouse_x - draw_width // 2
+        preview_y = mouse_y - draw_height // 2
         
         # Keep within playable area bounds
-        preview_x = max(0, min(preview_x, SCREEN_WIDTH - IRONYARD_WIDTH))
-        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - IRONYARD_HEIGHT))
+        preview_x = max(0, min(preview_x, SCREEN_WIDTH - draw_width))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - draw_height))
         
         # Choose color based on validity
         color = GRAY if is_valid else RED
         
-        # Draw filled rectangle
-        pygame.draw.rect(screen, color, (preview_x, preview_y, IRONYARD_WIDTH, IRONYARD_HEIGHT))
-        pygame.draw.rect(screen, BLACK, (preview_x, preview_y, IRONYARD_WIDTH, IRONYARD_HEIGHT), 2)
-        
-        # Draw button position indicator
-        preview_ironyard = IronYard(preview_x, preview_y, rotation)
-        button_x, button_y = preview_ironyard.get_button_pos()
-        pygame.draw.circle(screen, color, (button_x, button_y), 5)
+        # Draw filled rectangle with rotated dimensions
+        pygame.draw.rect(screen, color, (preview_x, preview_y, draw_width, draw_height))
+        pygame.draw.rect(screen, BLACK, (preview_x, preview_y, draw_width, draw_height), 2)
     
     def _draw_instructions(self, screen, build_type, rotation, is_valid):
         """Draw build mode instructions at bottom of screen"""
@@ -288,6 +359,7 @@ class BuildModeRenderer:
             "lumberyard": "Lumber Yard",
             "stoneyard": "Stone Yard",
             "ironyard": "Iron Yard",
+            "saltyard": "Salt Yard",
             "hut": "Hut"
         }
         build_type_name = build_type_names.get(build_type, "Structure")

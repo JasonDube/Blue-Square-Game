@@ -11,10 +11,15 @@ class LumberYard:
     def __init__(self, x, y, rotation=0):
         self.x = x
         self.y = y
-        self.width = LUMBERYARD_WIDTH
-        self.height = LUMBERYARD_HEIGHT
-        self.collision_enabled = True
         self.rotation = rotation  # 0 = top, 1 = right, 2 = bottom, 3 = left
+        # For rotations 1 and 3 (90/270 degrees), swap width and height
+        if rotation == 1 or rotation == 3:
+            self.width = LUMBERYARD_HEIGHT
+            self.height = LUMBERYARD_WIDTH
+        else:
+            self.width = LUMBERYARD_WIDTH
+            self.height = LUMBERYARD_HEIGHT
+        self.collision_enabled = False  # Collision disabled for prototype
         self.log_count = 0  # Per-building resource tracking (starts at 0!)
     
     def get_button_pos(self):
@@ -79,11 +84,6 @@ class LumberYard:
         # Draw stored logs if not preview
         if not preview:
             self._draw_stored_logs(screen)
-        
-        # Draw dot button on front wall
-        button_x, button_y = self.get_button_pos()
-        button_color = RED if self.collision_enabled else DARKER_GREEN
-        pygame.draw.circle(screen, button_color, (button_x, button_y), 5)
     
     def _draw_stored_logs(self, screen):
         """Draw visual representation of stored logs"""

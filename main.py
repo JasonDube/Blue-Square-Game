@@ -73,6 +73,15 @@ class Game:
             self.game_state.iron_mine_list = [iron_mine]
         else:
             self.game_state.iron_mine_list = []
+        
+        # Generate salt deposits
+        self.game_state.salt_list = WorldGenerator.generate_salt(
+            num_salt=12,
+            pen_list=pen_list,
+            tree_list=self.game_state.tree_list,
+            rock_list=self.game_state.rock_list,
+            iron_mine_list=self.game_state.iron_mine_list
+        )
     
     def run(self):
         """Main game loop"""
@@ -147,6 +156,7 @@ class Game:
             self.game_state.player_x, 
             self.game_state.player_y,
             self.game_state.pen_list,
+            self.game_state.hut_list, 
             self.game_state.townhall_list
         ):
             self.game_state.player_x, self.game_state.player_y = old_x, old_y
@@ -240,6 +250,11 @@ class Game:
             if not iron_mine.is_depleted():
                 iron_mine.draw(self.screen, show_health=show_health)
         
+        # Draw salt deposits
+        for salt in self.game_state.salt_list:
+            if not salt.is_depleted():
+                salt.draw(self.screen, show_health=show_health)
+        
         # Draw pens
         for pen in self.game_state.pen_list:
             pen.draw(self.screen, preview=False)
@@ -259,6 +274,10 @@ class Game:
         # Draw iron yards
         for iron_yard in self.game_state.iron_yard_list:
             iron_yard.draw(self.screen, preview=False)
+        
+        # Draw salt yards
+        for salt_yard in self.game_state.salt_yard_list:
+            salt_yard.draw(self.screen, preview=False)
         
         # Draw huts
         for hut in self.game_state.hut_list:

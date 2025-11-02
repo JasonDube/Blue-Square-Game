@@ -13,6 +13,7 @@ from entities.stoneyard import StoneYard
 from entities.ironyard import IronYard
 from entities.rock import Rock
 from entities.ironmine import IronMine
+from entities.salt import Salt
 
 
 # Medieval RPG-style names
@@ -149,6 +150,66 @@ class WorldGenerator:
                 return IronMine(mine_x, mine_y, health=1000)
         
         return None  # Couldn't find valid position
+    
+    @staticmethod
+    def generate_salt(num_salt=12, pen_list=None, tree_list=None, rock_list=None, iron_mine_list=None):
+        """Generate salt deposits randomly across the map"""
+        salt_list = []
+        
+        for _ in range(num_salt):
+            attempts = 0
+            while attempts < 50:
+                salt_x = random.randint(20, SCREEN_WIDTH - 20)
+                salt_y = random.randint(50, SCREEN_HEIGHT - 50)
+                
+                # Check distance from other resources
+                valid = True
+                
+                if tree_list:
+                    for tree in tree_list:
+                        dist = math.sqrt((salt_x - tree.x)**2 + (salt_y - tree.y)**2)
+                        if dist < 60:
+                            valid = False
+                            break
+                
+                if valid and rock_list:
+                    for rock in rock_list:
+                        dist = math.sqrt((salt_x - rock.x)**2 + (salt_y - rock.y)**2)
+                        if dist < 60:
+                            valid = False
+                            break
+                
+                if valid and iron_mine_list:
+                    for mine in iron_mine_list:
+                        dist = math.sqrt((salt_x - mine.x)**2 + (salt_y - mine.y)**2)
+                        if dist < 100:
+                            valid = False
+                            break
+                
+                if valid and pen_list:
+                    for pen in pen_list:
+                        pen_center_x = pen.x + pen.size // 2
+                        pen_center_y = pen.y + pen.size // 2
+                        dist = math.sqrt((salt_x - pen_center_x)**2 + (salt_y - pen_center_y)**2)
+                        if dist < 80:
+                            valid = False
+                            break
+                
+                # Check distance from other salt deposits
+                if valid:
+                    for salt in salt_list:
+                        dist = math.sqrt((salt_x - salt.x)**2 + (salt_y - salt.y)**2)
+                        if dist < 60:
+                            valid = False
+                            break
+                
+                if valid:
+                    salt_list.append(Salt(salt_x, salt_y))
+                    break
+                
+                attempts += 1
+        
+        return salt_list
     
     @staticmethod
     def _is_valid_resource_position(x, y, existing_resources, pen_list):

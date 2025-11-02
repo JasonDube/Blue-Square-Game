@@ -68,12 +68,15 @@ STONEYARD_WIDTH = 100
 STONEYARD_HEIGHT = 80
 IRONYARD_WIDTH = 120
 IRONYARD_HEIGHT = 100
+SALTYARD_WIDTH = 50
+SALTYARD_HEIGHT = 70
 HUT_SIZE = 50  # 50x50 square, circle fits inside
 
 # Building capacity (number of resources)
 LUMBERYARD_CAPACITY = 89
 STONEYARD_CAPACITY = 70  # Updated for visual fit
 IRONYARD_CAPACITY = 90   # Updated for visual fit
+SALTYARD_CAPACITY = 35   # Salt yard capacity
 
 # Herd settings
 HERD_BOUNDARY_SIZE = 100
@@ -110,9 +113,11 @@ HARVEST_TOOL_SIZE = 4  # Size of harvest tool visual
 TREE_INITIAL_HEALTH = 20       # Updated: 20 logs per tree
 ROCK_INITIAL_HEALTH = 100      # Updated: 100 stones per rock
 IRONMINE_INITIAL_HEALTH = 500  # Updated: 500 iron per mine
+SALT_INITIAL_HEALTH = 80       # 80 salt per salt deposit
 TREE_HEALTH_PER_HARVEST = 1    # 1 unit lost per harvest
 ROCK_HEALTH_PER_HARVEST = 1    # 1 unit lost per harvest
 IRONMINE_HEALTH_PER_HARVEST = 1  # 1 unit lost per harvest
+SALT_HEALTH_PER_HARVEST = 1    # 1 unit lost per harvest
 
 # Employment settings
 AUTO_WORK_SEARCH_RADIUS = 300  # How far employed workers look for resources

@@ -12,8 +12,8 @@ class Hut:
         self.x = x
         self.y = y
         self.size = HUT_SIZE  # 50x50 square
-        self.radius = HUT_SIZE // 2  # Circle fits within square
-        self.collision_enabled = True
+        self.radius = HUT_SIZE // 2  # Circle fits within square (radius = 25)
+        self.collision_enabled = False  # Collision disabled for prototype
         self.owner = None  # The human who owns this hut (None if unclaimed)
     
     def contains_point(self, px, py):
@@ -55,11 +55,11 @@ class Hut:
         if preview:
             # Preview mode - draw with transparency
             preview_surface = pygame.Surface((self.size, self.size), pygame.SRCALPHA)
-            pygame.draw.circle(preview_surface, (*BROWN, 128), (self.radius, self.radius), self.radius)
+            pygame.draw.circle(preview_surface, (*TAN, 128), (self.radius, self.radius), self.radius)
             screen.blit(preview_surface, (self.x, self.y))
         else:
-            # Normal mode - draw brown circle
-            pygame.draw.circle(screen, BROWN, (center_x, center_y), self.radius)
+            # Normal mode - draw light brown (TAN) circle - FIXED from BROWN
+            pygame.draw.circle(screen, TAN, (center_x, center_y), self.radius)
             pygame.draw.circle(screen, BLACK, (center_x, center_y), self.radius, 2)  # Border
         
         # Draw indicator if claimed (small dot or color change)
@@ -67,4 +67,3 @@ class Hut:
             # Draw a small colored dot to show it's claimed
             owner_color = BLUE if self.owner.gender == "male" else PINK
             pygame.draw.circle(screen, owner_color, (center_x, center_y), 5)
-

@@ -173,6 +173,10 @@ class HarvestSystem:
                 if building.add_iron():
                     self.resource_system.add_resource(ResourceType.IRON, 1)
                     deposited = True
+            elif human.resource_type == ResourceType.SALT:
+                if building.add_salt():
+                    self.resource_system.add_resource(ResourceType.SALT, 1)
+                    deposited = True
             
             if deposited:
                 human.carrying_resource = False
@@ -249,6 +253,7 @@ class HarvestSystem:
         from entities.tree import Tree
         from entities.rock import Rock
         from entities.ironmine import IronMine
+        from entities.salt import Salt
         
         if isinstance(resource, Tree):
             resource_type = ResourceType.LOG
@@ -281,6 +286,17 @@ class HarvestSystem:
                     break
             if not available_building:
                 self.show_error("No iron yard with space")
+                return False
+        
+        elif isinstance(resource, Salt):
+            resource_type = ResourceType.SALT
+            # Find salt yard with space
+            for salt_yard in game_state.salt_yard_list:
+                if salt_yard.can_accept_resource():
+                    available_building = salt_yard
+                    break
+            if not available_building:
+                self.show_error("No salt yard with space")
                 return False
         
         else:
@@ -316,7 +332,7 @@ class HarvestSystem:
         
         return True
     
-    def get_hovered_resource(self, mouse_x, mouse_y, tree_list, rock_list, iron_mine_list):
+    def get_hovered_resource(self, mouse_x, mouse_y, tree_list, rock_list, iron_mine_list, salt_list=None):
         """Get any harvestable resource under mouse cursor"""
         # Check trees
         for tree in tree_list:
@@ -332,6 +348,12 @@ class HarvestSystem:
         for iron_mine in iron_mine_list:
             if not iron_mine.is_depleted() and iron_mine.contains_point(mouse_x, mouse_y):
                 return iron_mine
+        
+        # Check salt deposits
+        if salt_list:
+            for salt in salt_list:
+                if not salt.is_depleted() and salt.contains_point(mouse_x, mouse_y):
+                    return salt
         
         return None
     

@@ -16,7 +16,7 @@ class EmploymentMenu:
         self.x = 0
         self.y = 0
         self.width = 250
-        self.height = 200
+        self.height = 315  # Increased height for saltworker job option
     
     def show(self, townhall, x, y):
         """Show the employment menu for a specific town hall"""
@@ -74,6 +74,7 @@ class EmploymentMenu:
         
         # Draw job options
         current_y = self.y + 60
+        button_spacing = 35
         
         # Lumberjack option
         lumberjack_info = self.townhall.job_slots['lumberjack']
@@ -88,16 +89,79 @@ class EmploymentMenu:
         hire_button_height = 25
         
         # Check if can hire
-        can_hire = (unemployed_males > 0 and 
-                   self.townhall.can_hire('lumberjack'))
+        can_hire_lumberjack = (unemployed_males > 0 and 
+                               self.townhall.can_hire('lumberjack'))
         
-        button_color = GREEN if can_hire else GRAY
+        button_color = GREEN if can_hire_lumberjack else GRAY
         pygame.draw.rect(screen, button_color, 
                         (hire_button_x, hire_button_y, hire_button_width, hire_button_height))
         pygame.draw.rect(screen, BLACK, 
                         (hire_button_x, hire_button_y, hire_button_width, hire_button_height), 2)
         
         hire_text = self.font_small.render("Hire", True, BLACK)
+        hire_text_rect = hire_text.get_rect(center=(hire_button_x + hire_button_width//2, 
+                                                     hire_button_y + hire_button_height//2))
+        screen.blit(hire_text, hire_text_rect)
+        
+        # Miner option
+        current_y += button_spacing
+        miner_info = self.townhall.job_slots['miner']
+        miner_text = f"Miner ({miner_info['filled']}/{miner_info['max']})"
+        miner_surface = self.font.render(miner_text, True, BLACK)
+        screen.blit(miner_surface, (self.x + 10, current_y))
+        
+        hire_button_y = current_y
+        can_hire_miner = (unemployed_males > 0 and 
+                         self.townhall.can_hire('miner'))
+        
+        button_color = GREEN if can_hire_miner else GRAY
+        pygame.draw.rect(screen, button_color, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height))
+        pygame.draw.rect(screen, BLACK, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height), 2)
+        
+        hire_text_rect = hire_text.get_rect(center=(hire_button_x + hire_button_width//2, 
+                                                     hire_button_y + hire_button_height//2))
+        screen.blit(hire_text, hire_text_rect)
+        
+        # Stoneworker option
+        current_y += button_spacing
+        stoneworker_info = self.townhall.job_slots['stoneworker']
+        stoneworker_text = f"Stoneworker ({stoneworker_info['filled']}/{stoneworker_info['max']})"
+        stoneworker_surface = self.font.render(stoneworker_text, True, BLACK)
+        screen.blit(stoneworker_surface, (self.x + 10, current_y))
+        
+        hire_button_y = current_y
+        can_hire_stoneworker = (unemployed_males > 0 and 
+                               self.townhall.can_hire('stoneworker'))
+        
+        button_color = GREEN if can_hire_stoneworker else GRAY
+        pygame.draw.rect(screen, button_color, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height))
+        pygame.draw.rect(screen, BLACK, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height), 2)
+        
+        hire_text_rect = hire_text.get_rect(center=(hire_button_x + hire_button_width//2, 
+                                                     hire_button_y + hire_button_height//2))
+        screen.blit(hire_text, hire_text_rect)
+        
+        # Saltworker option
+        current_y += button_spacing
+        saltworker_info = self.townhall.job_slots['saltworker']
+        saltworker_text = f"Saltworker ({saltworker_info['filled']}/{saltworker_info['max']})"
+        saltworker_surface = self.font.render(saltworker_text, True, BLACK)
+        screen.blit(saltworker_surface, (self.x + 10, current_y))
+        
+        hire_button_y = current_y
+        can_hire_saltworker = (unemployed_males > 0 and 
+                              self.townhall.can_hire('saltworker'))
+        
+        button_color = GREEN if can_hire_saltworker else GRAY
+        pygame.draw.rect(screen, button_color, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height))
+        pygame.draw.rect(screen, BLACK, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height), 2)
+        
         hire_text_rect = hire_text.get_rect(center=(hire_button_x + hire_button_width//2, 
                                                      hire_button_y + hire_button_height//2))
         screen.blit(hire_text, hire_text_rect)
@@ -140,15 +204,38 @@ class EmploymentMenu:
             self.hide()
             return True
         
-        # Check hire lumberjack button
+        # Check hire buttons
         hire_button_x = self.x + self.width - 60
-        hire_button_y = self.y + 60
         hire_button_width = 50
         hire_button_height = 25
+        button_spacing = 35
         
+        # Lumberjack button
+        hire_button_y = self.y + 60
         if (hire_button_x <= mouse_x <= hire_button_x + hire_button_width and
             hire_button_y <= mouse_y <= hire_button_y + hire_button_height):
             self._hire_lumberjack(game_state)
+            return True
+        
+        # Miner button
+        hire_button_y = self.y + 60 + button_spacing
+        if (hire_button_x <= mouse_x <= hire_button_x + hire_button_width and
+            hire_button_y <= mouse_y <= hire_button_y + hire_button_height):
+            self._hire_miner(game_state)
+            return True
+        
+        # Stoneworker button
+        hire_button_y = self.y + 60 + button_spacing * 2
+        if (hire_button_x <= mouse_x <= hire_button_x + hire_button_width and
+            hire_button_y <= mouse_y <= hire_button_y + hire_button_height):
+            self._hire_stoneworker(game_state)
+            return True
+        
+        # Saltworker button
+        hire_button_y = self.y + 60 + button_spacing * 3
+        if (hire_button_x <= mouse_x <= hire_button_x + hire_button_width and
+            hire_button_y <= mouse_y <= hire_button_y + hire_button_height):
+            self._hire_saltworker(game_state)
             return True
         
         return False
@@ -161,7 +248,34 @@ class EmploymentMenu:
                 # Try to hire them
                 if self.townhall.hire_human(human, 'lumberjack'):
                     human.is_employed = True
-                    print(f"Hired lumberjack! Now {self.townhall.job_slots['lumberjack']['filled']}/{self.townhall.job_slots['lumberjack']['max']}")
                     return
-        
-        print("No unemployed males available to hire")
+    
+    def _hire_miner(self, game_state):
+        """Hire an unemployed male as a miner"""
+        # Find first unemployed male
+        for human in game_state.human_list:
+            if human.gender == "male" and not human.is_employed:
+                # Try to hire them
+                if self.townhall.hire_human(human, 'miner'):
+                    human.is_employed = True
+                    return
+    
+    def _hire_stoneworker(self, game_state):
+        """Hire an unemployed male as a stoneworker"""
+        # Find first unemployed male
+        for human in game_state.human_list:
+            if human.gender == "male" and not human.is_employed:
+                # Try to hire them
+                if self.townhall.hire_human(human, 'stoneworker'):
+                    human.is_employed = True
+                    return
+    
+    def _hire_saltworker(self, game_state):
+        """Hire an unemployed male as a saltworker"""
+        # Find first unemployed male
+        for human in game_state.human_list:
+            if human.gender == "male" and not human.is_employed:
+                # Try to hire them
+                if self.townhall.hire_human(human, 'saltworker'):
+                    human.is_employed = True
+                    return

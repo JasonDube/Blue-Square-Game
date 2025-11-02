@@ -11,15 +11,23 @@ class TownHall:
     def __init__(self, x, y, rotation=0):
         self.x = x
         self.y = y
-        self.width = TOWNHALL_WIDTH
-        self.height = TOWNHALL_HEIGHT
-        self.collision_enabled = True
         self.rotation = rotation  # 0 = top, 1 = right, 2 = bottom, 3 = left
+        # For rotations 1 and 3 (90/270 degrees), swap width and height
+        if rotation == 1 or rotation == 3:
+            self.width = TOWNHALL_HEIGHT
+            self.height = TOWNHALL_WIDTH
+        else:
+            self.width = TOWNHALL_WIDTH
+            self.height = TOWNHALL_HEIGHT
+        self.collision_enabled = False  # Collision disabled for prototype
         
         # Employment tracking
         self.employed_humans = []  # List of humans employed at this town hall
         self.job_slots = {
             'lumberjack': {'max': 5, 'filled': 0},  # Can have up to 5 lumberjacks
+            'miner': {'max': 5, 'filled': 0},  # Can have up to 5 miners
+            'stoneworker': {'max': 5, 'filled': 0},  # Can have up to 5 stoneworkers
+            'saltworker': {'max': 5, 'filled': 0},  # Can have up to 5 saltworkers
             # Future: 'farmer': {'max': 3, 'filled': 0}, etc.
         }
     
@@ -78,7 +86,9 @@ class TownHall:
         self.job_slots[job_type]['filled'] += 1
         human.job = job_type
         human.employer = self
+        human.is_employed = True  # FIXED: Set employment flag
         human.state = "employed"
+        
         return True
     
     def fire_human(self, human):
@@ -91,6 +101,7 @@ class TownHall:
             self.job_slots[human.job]['filled'] -= 1
         human.job = None
         human.employer = None
+        human.is_employed = False  # FIXED: Clear employment flag
         human.state = "stay"
         return True
     
@@ -112,11 +123,6 @@ class TownHall:
         # Town halls only store wool and meat (logs/stones/iron have dedicated buildings)
         if not preview and resource_system:
             self._draw_stored_resources(screen, resource_system)
-        
-        # Draw dot button on front wall
-        button_x, button_y = self.get_button_pos()
-        button_color = RED if self.collision_enabled else DARKER_GREEN
-        pygame.draw.circle(screen, button_color, (button_x, button_y), 5)
     
     def _draw_stored_resources(self, screen, resource_system):
         """Draw visual representation of stored resources"""

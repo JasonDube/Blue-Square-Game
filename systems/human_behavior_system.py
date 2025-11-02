@@ -142,8 +142,8 @@ class HumanBehaviorSystem:
         human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
         human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
         
-        # Check collision with structures
-        if human._check_structure_collisions(game_state.pen_list, game_state.townhall_list):
+        # Check collision with structures (FIXED: now includes huts)
+        if self._check_structure_collisions(human, game_state):
             human.x, human.y = old_x, old_y
             # Try to pick a new target
             human.wander_target_x = None
@@ -166,6 +166,21 @@ class HumanBehaviorSystem:
                 else:
                     human.x, human.y = old_x, old_y
                 break
+    
+    def _check_structure_collisions(self, human, game_state):
+        """Check if human collides with any structure (FIXED: now includes huts)"""
+        for pen in game_state.pen_list:
+            if pen.check_collision_player(human.x, human.y):
+                return True
+        for townhall in game_state.townhall_list:
+            if townhall.check_collision_player(human.x, human.y):
+                return True
+        # FIXED: Add hut collision checks, but allow owner to pass through
+        for hut in game_state.hut_list:
+            # Allow the owner of the hut to pass through
+            if hut.owner != human and hut.check_collision_player(human.x, human.y):
+                return True
+        return False
     
     def _update_hut_claiming(self, game_state):
         """Update hut claiming - first come first serve for employed workers"""
@@ -199,15 +214,20 @@ class HumanBehaviorSystem:
                     human_y = human.y + human.size / 2
                     dist = distance(human_x, human_y, hut_center_x, hut_center_y)
                     
-                    # Claim if within reasonable distance (50 pixels)
-                    if dist < 50 and dist < nearest_dist:
+                    # NO DISTANCE CHECK - unlimited range!
+                    # Find the nearest worker (but allow any distance)
+                    if dist < nearest_dist:
                         nearest_dist = dist
                         nearest_human = human
                 
                 # Claim the hut for the nearest employed worker
                 if nearest_human:
-                    hut.claim(nearest_human)
-                    nearest_human.home_hut = hut
+                    success = hut.claim(nearest_human)
+                    if success:
+                        nearest_human.home_hut = hut
+
+
+
     
     def _update_sleep(self, human, dt, game_state):
         """Update sleep behavior - move to hut (if owned) or town hall and rest"""
@@ -272,8 +292,7 @@ class HumanBehaviorSystem:
                 human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
                 human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
                 
-                # Check collision (include huts in collision check)
-                if human._check_structure_collisions(game_state.pen_list, game_state.townhall_list):
+                # Check collision (FIXED: now uses proper collision check with huts)
+                if self._check_structure_collisions(human, game_state):
                     human.x, human.y = old_x, old_y
             # If close enough, they're sleeping (no movement needed)
-

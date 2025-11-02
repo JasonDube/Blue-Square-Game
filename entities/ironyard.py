@@ -11,10 +11,15 @@ class IronYard:
     def __init__(self, x, y, rotation=0):
         self.x = x
         self.y = y
-        self.width = IRONYARD_WIDTH
-        self.height = IRONYARD_HEIGHT
-        self.collision_enabled = True
         self.rotation = rotation  # 0 = top, 1 = right, 2 = bottom, 3 = left
+        # For rotations 1 and 3 (90/270 degrees), swap width and height
+        if rotation == 1 or rotation == 3:
+            self.width = IRONYARD_HEIGHT
+            self.height = IRONYARD_WIDTH
+        else:
+            self.width = IRONYARD_WIDTH
+            self.height = IRONYARD_HEIGHT
+        self.collision_enabled = False  # Collision disabled for prototype
         self.iron_count = 0  # Per-building resource tracking
     
     def get_button_pos(self):
@@ -79,11 +84,6 @@ class IronYard:
         # Draw stored iron if not preview
         if not preview:
             self._draw_stored_iron(screen)
-        
-        # Draw dot button on front wall
-        button_x, button_y = self.get_button_pos()
-        button_color = RED if self.collision_enabled else DARKER_GREEN
-        pygame.draw.circle(screen, button_color, (button_x, button_y), 5)
     
     def _draw_stored_iron(self, screen):
         """Draw visual representation of stored iron"""

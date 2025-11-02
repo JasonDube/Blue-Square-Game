@@ -90,10 +90,6 @@ class InputSystem:
         if self._check_player_context_menu(mouse_x, mouse_y):
             return
         
-        # Check structure buttons
-        if not self.game_state.build_mode and self._check_structure_buttons(mouse_x, mouse_y):
-            return
-        
         # Handle build mode placement
         if self.game_state.build_mode:
             self._place_structure(mouse_x, mouse_y)
@@ -131,6 +127,12 @@ class InputSystem:
                 if building_rect.colliderect(iron_mine.get_bounds()):
                     return False
         
+        # Check collision with salt deposits
+        for salt in self.game_state.salt_list:
+            if not salt.is_depleted():
+                if building_rect.colliderect(salt.get_bounds()):
+                    return False
+        
         # Check collision with existing buildings
         for pen in self.game_state.pen_list:
             if building_rect.colliderect(pygame.Rect(pen.x, pen.y, pen.size, pen.size)):
@@ -152,6 +154,10 @@ class InputSystem:
             if building_rect.colliderect(pygame.Rect(iron_yard.x, iron_yard.y, iron_yard.width, iron_yard.height)):
                 return False
         
+        for salt_yard in self.game_state.salt_yard_list:
+            if building_rect.colliderect(pygame.Rect(salt_yard.x, salt_yard.y, salt_yard.width, salt_yard.height)):
+                return False
+        
         for hut in self.game_state.hut_list:
             if building_rect.colliderect(pygame.Rect(hut.x, hut.y, hut.size, hut.size)):
                 return False
@@ -168,7 +174,8 @@ class InputSystem:
             mouse_x, mouse_y, 
             self.game_state.tree_list,
             self.game_state.rock_list,
-            self.game_state.iron_mine_list
+            self.game_state.iron_mine_list,
+            self.game_state.salt_list
         )
         
         if resource:
@@ -216,13 +223,34 @@ class InputSystem:
                                 human.state = "employed"
                                 
                                 # Reset target building and resource type to match job
+                                from systems.resource_system import ResourceType
                                 if human.job == "lumberjack":
-                                    from systems.resource_system import ResourceType
                                     # Find appropriate lumber yard
                                     for lumber_yard in self.game_state.lumber_yard_list:
                                         if lumber_yard.can_accept_resource():
                                             human.target_building = lumber_yard
                                             human.resource_type = ResourceType.LOG
+                                            break
+                                elif human.job == "miner":
+                                    # Find appropriate iron yard
+                                    for iron_yard in self.game_state.iron_yard_list:
+                                        if iron_yard.can_accept_resource():
+                                            human.target_building = iron_yard
+                                            human.resource_type = ResourceType.IRON
+                                            break
+                                elif human.job == "stoneworker":
+                                    # Find appropriate stone yard
+                                    for stone_yard in self.game_state.stone_yard_list:
+                                        if stone_yard.can_accept_resource():
+                                            human.target_building = stone_yard
+                                            human.resource_type = ResourceType.STONE
+                                            break
+                                elif human.job == "saltworker":
+                                    # Find appropriate salt yard
+                                    for salt_yard in self.game_state.salt_yard_list:
+                                        if salt_yard.can_accept_resource():
+                                            human.target_building = salt_yard
+                                            human.resource_type = ResourceType.SALT
                                             break
                                 
                                 # Restore harvest_target from work_target if work_target exists
@@ -240,11 +268,21 @@ class InputSystem:
                                     human.harvest_timer = 0.0
                                 
                                 # Clear any wrong resource types if carrying something
-                                if human.carrying_resource and human.job == "lumberjack":
+                                if human.carrying_resource:
                                     # If they're carrying the wrong resource type, drop it
-                                    if human.resource_type != ResourceType.LOG:
+                                    expected_type = None
+                                    if human.job == "lumberjack":
+                                        expected_type = ResourceType.LOG
+                                    elif human.job == "miner":
+                                        expected_type = ResourceType.IRON
+                                    elif human.job == "stoneworker":
+                                        expected_type = ResourceType.STONE
+                                    elif human.job == "saltworker":
+                                        expected_type = ResourceType.SALT
+                                    
+                                    if expected_type and human.resource_type != expected_type:
                                         human.carrying_resource = False
-                                        human.resource_type = ResourceType.LOG
+                                        human.resource_type = expected_type
                             else:
                                 # Unemployed - set to wander
                                 human.state = "wander"
@@ -321,50 +359,14 @@ class InputSystem:
             elif option == "build_ironyard":
                 self.game_state.build_mode = True
                 self.game_state.build_mode_type = "ironyard"
+            elif option == "build_saltyard":
+                self.game_state.build_mode = True
+                self.game_state.build_mode_type = "saltyard"
             elif option == "build_hut":
                 self.game_state.build_mode = True
                 self.game_state.build_mode_type = "hut"
             self.game_state.show_player_context_menu = False
             return True
-        return False
-    
-    def _check_structure_buttons(self, mouse_x, mouse_y):
-        """Check if clicking on structure toggle buttons"""
-        # Check pen buttons
-        for pen in self.game_state.pen_list:
-            button_rect = pen.get_button_rect()
-            if button_rect.collidepoint(mouse_x, mouse_y):
-                pen.collision_enabled = not pen.collision_enabled
-                return True
-        
-        # Check townhall buttons
-        for townhall in self.game_state.townhall_list:
-            button_rect = townhall.get_button_rect()
-            if button_rect.collidepoint(mouse_x, mouse_y):
-                townhall.collision_enabled = not townhall.collision_enabled
-                return True
-        
-        # Check lumber yard buttons
-        for lumber_yard in self.game_state.lumber_yard_list:
-            button_rect = lumber_yard.get_button_rect()
-            if button_rect.collidepoint(mouse_x, mouse_y):
-                lumber_yard.collision_enabled = not lumber_yard.collision_enabled
-                return True
-        
-        # Check stone yard buttons
-        for stone_yard in self.game_state.stone_yard_list:
-            button_rect = stone_yard.get_button_rect()
-            if button_rect.collidepoint(mouse_x, mouse_y):
-                stone_yard.collision_enabled = not stone_yard.collision_enabled
-                return True
-        
-        # Check iron yard buttons
-        for iron_yard in self.game_state.iron_yard_list:
-            button_rect = iron_yard.get_button_rect()
-            if button_rect.collidepoint(mouse_x, mouse_y):
-                iron_yard.collision_enabled = not iron_yard.collision_enabled
-                return True
-        
         return False
     
     def _place_structure(self, mouse_x, mouse_y):
@@ -382,49 +384,103 @@ class InputSystem:
                 self.game_state.pen_rotation = 0
             
         elif self.game_state.build_mode_type == "townhall":
-            townhall_x = mouse_x - TOWNHALL_WIDTH // 2
-            townhall_y = mouse_y - TOWNHALL_HEIGHT // 2
-            townhall_x = max(0, min(townhall_x, SCREEN_WIDTH - TOWNHALL_WIDTH))
-            townhall_y = max(PLAYABLE_AREA_TOP, min(townhall_y, PLAYABLE_AREA_BOTTOM - TOWNHALL_HEIGHT))
+            # Account for rotation - swap dimensions for 90/270 degree rotations
+            rotation = self.game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                draw_width = TOWNHALL_HEIGHT
+                draw_height = TOWNHALL_WIDTH
+            else:
+                draw_width = TOWNHALL_WIDTH
+                draw_height = TOWNHALL_HEIGHT
             
-            if self._check_placement_valid(townhall_x, townhall_y, TOWNHALL_WIDTH, TOWNHALL_HEIGHT):
+            townhall_x = mouse_x - draw_width // 2
+            townhall_y = mouse_y - draw_height // 2
+            townhall_x = max(0, min(townhall_x, SCREEN_WIDTH - draw_width))
+            townhall_y = max(PLAYABLE_AREA_TOP, min(townhall_y, PLAYABLE_AREA_BOTTOM - draw_height))
+            
+            if self._check_placement_valid(townhall_x, townhall_y, draw_width, draw_height):
                 self.game_state.townhall_list.append(TownHall(townhall_x, townhall_y, self.game_state.pen_rotation))
                 self.game_state.build_mode = False
                 self.game_state.build_mode_type = None
                 self.game_state.pen_rotation = 0
             
         elif self.game_state.build_mode_type == "lumberyard":
-            lumberyard_x = mouse_x - LUMBERYARD_WIDTH // 2
-            lumberyard_y = mouse_y - LUMBERYARD_HEIGHT // 2
-            lumberyard_x = max(0, min(lumberyard_x, SCREEN_WIDTH - LUMBERYARD_WIDTH))
-            lumberyard_y = max(PLAYABLE_AREA_TOP, min(lumberyard_y, PLAYABLE_AREA_BOTTOM - LUMBERYARD_HEIGHT))
+            rotation = self.game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                draw_width = LUMBERYARD_HEIGHT
+                draw_height = LUMBERYARD_WIDTH
+            else:
+                draw_width = LUMBERYARD_WIDTH
+                draw_height = LUMBERYARD_HEIGHT
             
-            if self._check_placement_valid(lumberyard_x, lumberyard_y, LUMBERYARD_WIDTH, LUMBERYARD_HEIGHT):
+            lumberyard_x = mouse_x - draw_width // 2
+            lumberyard_y = mouse_y - draw_height // 2
+            lumberyard_x = max(0, min(lumberyard_x, SCREEN_WIDTH - draw_width))
+            lumberyard_y = max(PLAYABLE_AREA_TOP, min(lumberyard_y, PLAYABLE_AREA_BOTTOM - draw_height))
+            
+            if self._check_placement_valid(lumberyard_x, lumberyard_y, draw_width, draw_height):
                 self.game_state.lumber_yard_list.append(LumberYard(lumberyard_x, lumberyard_y, self.game_state.pen_rotation))
                 self.game_state.build_mode = False
                 self.game_state.build_mode_type = None
                 self.game_state.pen_rotation = 0
             
         elif self.game_state.build_mode_type == "stoneyard":
-            stoneyard_x = mouse_x - STONEYARD_WIDTH // 2
-            stoneyard_y = mouse_y - STONEYARD_HEIGHT // 2
-            stoneyard_x = max(0, min(stoneyard_x, SCREEN_WIDTH - STONEYARD_WIDTH))
-            stoneyard_y = max(PLAYABLE_AREA_TOP, min(stoneyard_y, PLAYABLE_AREA_BOTTOM - STONEYARD_HEIGHT))
+            rotation = self.game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                draw_width = STONEYARD_HEIGHT
+                draw_height = STONEYARD_WIDTH
+            else:
+                draw_width = STONEYARD_WIDTH
+                draw_height = STONEYARD_HEIGHT
             
-            if self._check_placement_valid(stoneyard_x, stoneyard_y, STONEYARD_WIDTH, STONEYARD_HEIGHT):
+            stoneyard_x = mouse_x - draw_width // 2
+            stoneyard_y = mouse_y - draw_height // 2
+            stoneyard_x = max(0, min(stoneyard_x, SCREEN_WIDTH - draw_width))
+            stoneyard_y = max(PLAYABLE_AREA_TOP, min(stoneyard_y, PLAYABLE_AREA_BOTTOM - draw_height))
+            
+            if self._check_placement_valid(stoneyard_x, stoneyard_y, draw_width, draw_height):
                 self.game_state.stone_yard_list.append(StoneYard(stoneyard_x, stoneyard_y, self.game_state.pen_rotation))
                 self.game_state.build_mode = False
                 self.game_state.build_mode_type = None
                 self.game_state.pen_rotation = 0
             
         elif self.game_state.build_mode_type == "ironyard":
-            ironyard_x = mouse_x - IRONYARD_WIDTH // 2
-            ironyard_y = mouse_y - IRONYARD_HEIGHT // 2
-            ironyard_x = max(0, min(ironyard_x, SCREEN_WIDTH - IRONYARD_WIDTH))
-            ironyard_y = max(PLAYABLE_AREA_TOP, min(ironyard_y, PLAYABLE_AREA_BOTTOM - IRONYARD_HEIGHT))
+            rotation = self.game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                draw_width = IRONYARD_HEIGHT
+                draw_height = IRONYARD_WIDTH
+            else:
+                draw_width = IRONYARD_WIDTH
+                draw_height = IRONYARD_HEIGHT
             
-            if self._check_placement_valid(ironyard_x, ironyard_y, IRONYARD_WIDTH, IRONYARD_HEIGHT):
+            ironyard_x = mouse_x - draw_width // 2
+            ironyard_y = mouse_y - draw_height // 2
+            ironyard_x = max(0, min(ironyard_x, SCREEN_WIDTH - draw_width))
+            ironyard_y = max(PLAYABLE_AREA_TOP, min(ironyard_y, PLAYABLE_AREA_BOTTOM - draw_height))
+            
+            if self._check_placement_valid(ironyard_x, ironyard_y, draw_width, draw_height):
                 self.game_state.iron_yard_list.append(IronYard(ironyard_x, ironyard_y, self.game_state.pen_rotation))
+                self.game_state.build_mode = False
+                self.game_state.build_mode_type = None
+                self.game_state.pen_rotation = 0
+            
+        elif self.game_state.build_mode_type == "saltyard":
+            from entities.saltyard import SaltYard
+            rotation = self.game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                draw_width = SALTYARD_HEIGHT
+                draw_height = SALTYARD_WIDTH
+            else:
+                draw_width = SALTYARD_WIDTH
+                draw_height = SALTYARD_HEIGHT
+            
+            saltyard_x = mouse_x - draw_width // 2
+            saltyard_y = mouse_y - draw_height // 2
+            saltyard_x = max(0, min(saltyard_x, SCREEN_WIDTH - draw_width))
+            saltyard_y = max(PLAYABLE_AREA_TOP, min(saltyard_y, PLAYABLE_AREA_BOTTOM - draw_height))
+            
+            if self._check_placement_valid(saltyard_x, saltyard_y, draw_width, draw_height):
+                self.game_state.salt_yard_list.append(SaltYard(saltyard_x, saltyard_y, self.game_state.pen_rotation))
                 self.game_state.build_mode = False
                 self.game_state.build_mode_type = None
                 self.game_state.pen_rotation = 0
@@ -504,7 +560,7 @@ class InputSystem:
             self.game_state.show_player_context_menu = False
         else:
             # Show player context menu - clamp to playable area
-            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - 190))
+            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - 220))
             self.game_state.show_context_menu = False
             self.game_state.show_male_human_context_menu = False
             self.game_state.show_female_human_context_menu = False
@@ -646,21 +702,24 @@ class InputSystem:
     def _check_player_menu_click(self, mx, my):
         """Check if clicking on player context menu"""
         context_menu_width = 160
-        context_menu_height = 180  # Increased for 6 options (including hut)
+        context_menu_height = 210  # Increased for 7 options (including salt yard and hut)
         x = self.game_state.player_context_menu_x
         y = self.game_state.player_context_menu_y
         
         if x <= mx <= x + context_menu_width:
+            # Menu items aligned with separators at y+30, y+57, y+84, y+111, y+138, y+165
             if y <= my <= y + 30:
                 return "build_pen"
-            elif y + 30 <= my <= y + 60:
+            elif y + 30 <= my <= y + 57:
                 return "build_townhall"
-            elif y + 60 <= my <= y + 90:
+            elif y + 57 <= my <= y + 84:
                 return "build_lumberyard"
-            elif y + 90 <= my <= y + 120:
+            elif y + 84 <= my <= y + 111:
                 return "build_stoneyard"
-            elif y + 120 <= my <= y + 150:
+            elif y + 111 <= my <= y + 138:
                 return "build_ironyard"
-            elif y + 150 <= my <= y + context_menu_height:
+            elif y + 138 <= my <= y + 165:
+                return "build_saltyard"
+            elif y + 165 <= my <= y + context_menu_height:
                 return "build_hut"
         return None

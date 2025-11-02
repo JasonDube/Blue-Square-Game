@@ -12,7 +12,7 @@ class Pen:
         self.x = x
         self.y = y
         self.size = size
-        self.collision_enabled = True
+        self.collision_enabled = False  # Collision disabled for prototype
         self.rotation = rotation  # 0 = top, 1 = right, 2 = bottom, 3 = left
     
     def get_button_pos(self):
@@ -79,8 +79,4 @@ class Pen:
         pygame.draw.line(screen, color, (self.x + self.size, self.y), (self.x + self.size, self.y + self.size), 2)
         pygame.draw.line(screen, color, (self.x + self.size, self.y + self.size), (self.x, self.y + self.size), 2)
         pygame.draw.line(screen, color, (self.x, self.y + self.size), (self.x, self.y), 2)
-        
-        # Draw dot button on front wall
-        button_x, button_y = self.get_button_pos()
-        button_color = RED if self.collision_enabled else DARKER_GREEN
-        pygame.draw.circle(screen, button_color, (button_x, button_y), 5)
+
