@@ -8,6 +8,7 @@ from entities.townhall import TownHall
 from entities.lumberyard import LumberYard
 from entities.stoneyard import StoneYard
 from entities.ironyard import IronYard
+from entities.hut import Hut
 
 
 class BuildModeRenderer:
@@ -37,6 +38,8 @@ class BuildModeRenderer:
             self._draw_stoneyard_preview(screen, mouse_x, mouse_y, game_state.pen_rotation, is_valid)
         elif game_state.build_mode_type == "ironyard":
             self._draw_ironyard_preview(screen, mouse_x, mouse_y, game_state.pen_rotation, is_valid)
+        elif game_state.build_mode_type == "hut":
+            self._draw_hut_preview(screen, mouse_x, mouse_y, is_valid)
         
         # Draw instructions
         self._draw_instructions(screen, game_state.build_mode_type, game_state.pen_rotation, is_valid)
@@ -70,12 +73,17 @@ class BuildModeRenderer:
             height = IRONYARD_HEIGHT
             preview_x = mouse_x - IRONYARD_WIDTH // 2
             preview_y = mouse_y - IRONYARD_HEIGHT // 2
+        elif build_type == "hut":
+            width = HUT_SIZE
+            height = HUT_SIZE
+            preview_x = mouse_x - HUT_SIZE // 2
+            preview_y = mouse_y - HUT_SIZE // 2
         else:
             return True
         
-        # Keep within screen bounds
+        # Keep within playable area bounds
         preview_x = max(0, min(preview_x, SCREEN_WIDTH - width))
-        preview_y = max(0, min(preview_y, SCREEN_HEIGHT - height))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - height))
         
         # Create rect for the building
         building_rect = pygame.Rect(preview_x, preview_y, width, height)
@@ -131,6 +139,12 @@ class BuildModeRenderer:
             if building_rect.colliderect(iron_rect):
                 return False
         
+        # Check collision with huts (circular, but check bounding box)
+        for hut in game_state.hut_list:
+            hut_rect = pygame.Rect(hut.x, hut.y, hut.size, hut.size)
+            if building_rect.colliderect(hut_rect):
+                return False
+        
         return True
     
     def _draw_pen_preview(self, screen, mouse_x, mouse_y, rotation, is_valid):
@@ -138,9 +152,9 @@ class BuildModeRenderer:
         preview_x = mouse_x - PEN_SIZE // 2
         preview_y = mouse_y - PEN_SIZE // 2
         
-        # Keep within screen bounds
+        # Keep within playable area bounds
         preview_x = max(0, min(preview_x, SCREEN_WIDTH - PEN_SIZE))
-        preview_y = max(0, min(preview_y, SCREEN_HEIGHT - PEN_SIZE))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - PEN_SIZE))
         
         # Choose color based on validity
         color = GRAY if is_valid else RED
@@ -161,9 +175,9 @@ class BuildModeRenderer:
         preview_x = mouse_x - TOWNHALL_WIDTH // 2
         preview_y = mouse_y - TOWNHALL_HEIGHT // 2
         
-        # Keep within screen bounds
+        # Keep within playable area bounds
         preview_x = max(0, min(preview_x, SCREEN_WIDTH - TOWNHALL_WIDTH))
-        preview_y = max(0, min(preview_y, SCREEN_HEIGHT - TOWNHALL_HEIGHT))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - TOWNHALL_HEIGHT))
         
         # Choose color based on validity
         color = GRAY if is_valid else RED
@@ -182,9 +196,9 @@ class BuildModeRenderer:
         preview_x = mouse_x - LUMBERYARD_WIDTH // 2
         preview_y = mouse_y - LUMBERYARD_HEIGHT // 2
         
-        # Keep within screen bounds
+        # Keep within playable area bounds
         preview_x = max(0, min(preview_x, SCREEN_WIDTH - LUMBERYARD_WIDTH))
-        preview_y = max(0, min(preview_y, SCREEN_HEIGHT - LUMBERYARD_HEIGHT))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - LUMBERYARD_HEIGHT))
         
         # Choose color based on validity
         color = GRAY if is_valid else RED
@@ -203,9 +217,9 @@ class BuildModeRenderer:
         preview_x = mouse_x - STONEYARD_WIDTH // 2
         preview_y = mouse_y - STONEYARD_HEIGHT // 2
         
-        # Keep within screen bounds
+        # Keep within playable area bounds
         preview_x = max(0, min(preview_x, SCREEN_WIDTH - STONEYARD_WIDTH))
-        preview_y = max(0, min(preview_y, SCREEN_HEIGHT - STONEYARD_HEIGHT))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - STONEYARD_HEIGHT))
         
         # Choose color based on validity
         color = GRAY if is_valid else RED
@@ -219,14 +233,39 @@ class BuildModeRenderer:
         button_x, button_y = preview_stoneyard.get_button_pos()
         pygame.draw.circle(screen, color, (button_x, button_y), 5)
     
+    def _draw_hut_preview(self, screen, mouse_x, mouse_y, is_valid):
+        """Draw hut preview"""
+        preview_color = GREEN if is_valid else RED
+        
+        # Clamp position to playable area
+        preview_x = mouse_x - HUT_SIZE // 2
+        preview_y = mouse_y - HUT_SIZE // 2
+        preview_x = max(0, min(preview_x, SCREEN_WIDTH - HUT_SIZE))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - HUT_SIZE))
+        
+        # Draw circle preview
+        center_x = int(preview_x + HUT_SIZE // 2)
+        center_y = int(preview_y + HUT_SIZE // 2)
+        radius = HUT_SIZE // 2
+        
+        # Draw filled circle with transparency
+        preview_surface = pygame.Surface((HUT_SIZE, HUT_SIZE), pygame.SRCALPHA)
+        preview_color_alpha = (*preview_color, 128) if is_valid else (*RED, 128)
+        pygame.draw.circle(preview_surface, preview_color_alpha, (radius, radius), radius)
+        screen.blit(preview_surface, (preview_x, preview_y))
+        
+        # Draw border
+        border_color = GREEN if is_valid else RED
+        pygame.draw.circle(screen, border_color, (center_x, center_y), radius, 2)
+    
     def _draw_ironyard_preview(self, screen, mouse_x, mouse_y, rotation, is_valid):
         """Draw preview of iron yard placement"""
         preview_x = mouse_x - IRONYARD_WIDTH // 2
         preview_y = mouse_y - IRONYARD_HEIGHT // 2
         
-        # Keep within screen bounds
+        # Keep within playable area bounds
         preview_x = max(0, min(preview_x, SCREEN_WIDTH - IRONYARD_WIDTH))
-        preview_y = max(0, min(preview_y, SCREEN_HEIGHT - IRONYARD_HEIGHT))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - IRONYARD_HEIGHT))
         
         # Choose color based on validity
         color = GRAY if is_valid else RED
@@ -248,7 +287,8 @@ class BuildModeRenderer:
             "townhall": "Town Hall",
             "lumberyard": "Lumber Yard",
             "stoneyard": "Stone Yard",
-            "ironyard": "Iron Yard"
+            "ironyard": "Iron Yard",
+            "hut": "Hut"
         }
         build_type_name = build_type_names.get(build_type, "Structure")
         
@@ -258,8 +298,9 @@ class BuildModeRenderer:
         
         text = f"Build Mode: {build_type_name} (Rotation: {rotation_names[rotation]}) - {status}"
         text_surface = self.font.render(text, True, status_color)
-        screen.blit(text_surface, (10, SCREEN_HEIGHT - 50))
+        # Position above bottom HUD
+        screen.blit(text_surface, (10, PLAYABLE_AREA_BOTTOM - 45))
         
         hint = "Q/E or Mouse Wheel to rotate - ESC to cancel"
         hint_surface = self.font.render(hint, True, WHITE)
-        screen.blit(hint_surface, (10, SCREEN_HEIGHT - 30))
+        screen.blit(hint_surface, (10, PLAYABLE_AREA_BOTTOM - 25))

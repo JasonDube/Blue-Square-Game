@@ -21,6 +21,9 @@ class HUD:
         # Draw sheep counter on left
         self._draw_sheep_counter(screen, game_state)
         
+        # Draw human counters after sheep
+        self._draw_human_counters(screen, game_state)
+        
         # Draw resources (logs, stone, etc.) in middle-left
         self._draw_resources(screen, resource_system)
         
@@ -40,12 +43,53 @@ class HUD:
         count_x = sheep_icon_x + 10
         screen.blit(count_surface, (count_x, self.bar_height // 2 - count_surface.get_height() // 2))
     
+    def _draw_human_counters(self, screen, game_state):
+        """Draw male and female human counters"""
+        # Count humans
+        male_count = sum(1 for h in game_state.human_list if h.gender == "male")
+        female_count = sum(1 for h in game_state.human_list if h.gender == "female")
+        
+        # Position after sheep counter (sheep icon + number + spacing)
+        start_x = 60
+        current_x = start_x
+        icon_size = 12  # Size for icons in HUD
+        
+        # Draw male human counter (blue unfilled square)
+        male_icon_x = current_x
+        male_icon_y = (self.bar_height - icon_size) // 2
+        pygame.draw.rect(screen, BLUE, (male_icon_x, male_icon_y, icon_size, icon_size), 2)  # Unfilled
+        
+        male_count_text = str(male_count)
+        male_count_surface = self.font.render(male_count_text, True, WHITE)
+        male_count_x = male_icon_x + icon_size + 5
+        screen.blit(male_count_surface, (male_count_x, self.bar_height // 2 - male_count_surface.get_height() // 2))
+        
+        # Move to next position
+        current_x = male_count_x + male_count_surface.get_width() + 15
+        
+        # Draw female human counter (pink unfilled circle)
+        female_icon_x = current_x
+        female_icon_y = (self.bar_height - icon_size) // 2
+        radius = icon_size // 2
+        pygame.draw.circle(screen, PINK, (female_icon_x + radius, female_icon_y + radius), radius, 2)  # Unfilled
+        
+        female_count_text = str(female_count)
+        female_count_surface = self.font.render(female_count_text, True, WHITE)
+        female_count_x = female_icon_x + icon_size + 5
+        screen.blit(female_count_surface, (female_count_x, self.bar_height // 2 - female_count_surface.get_height() // 2))
+        
+        # Update start position for resources
+        self._human_counters_end_x = female_count_x + female_count_surface.get_width() + 15
+    
     def _draw_resources(self, screen, resource_system):
         """Draw resource icons and counts"""
         from systems.resource_system import ResourceType, ResourceVisualizer
         
-        # Start position after sheep counter
-        start_x = 60
+        # Start position after human counters (or sheep counter if no humans method called)
+        if hasattr(self, '_human_counters_end_x'):
+            start_x = self._human_counters_end_x
+        else:
+            start_x = 60
         current_x = start_x
         
         # Resource display order

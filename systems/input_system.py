@@ -13,9 +13,10 @@ from entities.ironyard import IronYard
 class InputSystem:
     """Handles all user input (keyboard and mouse)"""
     
-    def __init__(self, game_state, harvest_system=None):
+    def __init__(self, game_state, harvest_system=None, employment_menu=None):
         self.game_state = game_state
         self.harvest_system = harvest_system
+        self.employment_menu = employment_menu
     
     def handle_event(self, event):
         """Handle a single pygame event"""
@@ -77,7 +78,11 @@ class InputSystem:
             self._handle_harvest_target_selection(mouse_x, mouse_y)
             return
         
-        # Check context menus first
+        # Check employment menu first (if active)
+        if self.employment_menu and self.employment_menu.handle_click(mouse_x, mouse_y, self.game_state):
+            return
+        
+        # Check context menus
         if self._check_context_menus(mouse_x, mouse_y):
             return
         
@@ -93,6 +98,10 @@ class InputSystem:
         if self.game_state.build_mode:
             self._place_structure(mouse_x, mouse_y)
         else:
+            # Check for entity click first (single selection)
+            if self._try_select_entity(mouse_x, mouse_y):
+                return
+            
             # Start box selection
             self.game_state.box_selecting = True
             self.game_state.box_start_x = mouse_x
@@ -143,6 +152,10 @@ class InputSystem:
             if building_rect.colliderect(pygame.Rect(iron_yard.x, iron_yard.y, iron_yard.width, iron_yard.height)):
                 return False
         
+        for hut in self.game_state.hut_list:
+            if building_rect.colliderect(pygame.Rect(hut.x, hut.y, hut.size, hut.size)):
+                return False
+        
         return True
     
     def _handle_harvest_target_selection(self, mouse_x, mouse_y):
@@ -187,7 +200,7 @@ class InputSystem:
                 self.game_state.show_context_menu = False
         
         if self.game_state.show_male_human_context_menu:
-            option = self._check_male_human_context_menu_click(mouse_x, mouse_y)
+            option = self._check_male_human_context_menu_click(mouse_x, mouse_y, self.game_state)
             if option:
                 if option == "harvest":
                     # Activate harvest cursor mode
@@ -195,6 +208,52 @@ class InputSystem:
                         self.harvest_system.activate_harvest_cursor()
                         # Hide system cursor
                         pygame.mouse.set_visible(False)
+                elif option == "auto":
+                    # Set to automated behavior (work if employed, wander if not)
+                    for human in self.game_state.human_list:
+                        if human.selected and human.gender == "male":
+                            if human.is_employed:
+                                human.state = "employed"
+                                
+                                # Reset target building and resource type to match job
+                                if human.job == "lumberjack":
+                                    from systems.resource_system import ResourceType
+                                    # Find appropriate lumber yard
+                                    for lumber_yard in self.game_state.lumber_yard_list:
+                                        if lumber_yard.can_accept_resource():
+                                            human.target_building = lumber_yard
+                                            human.resource_type = ResourceType.LOG
+                                            break
+                                
+                                # Restore harvest_target from work_target if work_target exists
+                                if human.work_target and not human.harvest_target:
+                                    human.harvest_target = human.work_target
+                                    # Reset harvest position so it gets recalculated
+                                    human.harvest_position = None
+                                    human.harvest_timer = 0.0
+                                # Clear any manual harvest assignments (not work assignments)
+                                # Only clear if there's a conflict (harvest_target different from work_target)
+                                if (human.harvest_target and human.work_target and 
+                                    human.harvest_target != human.work_target):
+                                    human.harvest_target = None
+                                    human.harvest_position = None
+                                    human.harvest_timer = 0.0
+                                
+                                # Clear any wrong resource types if carrying something
+                                if human.carrying_resource and human.job == "lumberjack":
+                                    # If they're carrying the wrong resource type, drop it
+                                    if human.resource_type != ResourceType.LOG:
+                                        human.carrying_resource = False
+                                        human.resource_type = ResourceType.LOG
+                            else:
+                                # Unemployed - set to wander
+                                human.state = "wander"
+                                human.wander_timer = 0.0
+                                human.wander_duration = 0.0
+                                human.wander_direction = None
+                                human.wander_target_x = None
+                                human.wander_target_y = None
+                                human.is_wandering = False
                 else:
                     # Apply follow/stay command to selected male humans
                     for human in self.game_state.human_list:
@@ -210,12 +269,34 @@ class InputSystem:
                 self.game_state.show_male_human_context_menu = False
         
         if self.game_state.show_female_human_context_menu:
-            option = self._check_female_human_context_menu_click(mouse_x, mouse_y)
+            option = self._check_female_human_context_menu_click(mouse_x, mouse_y, self.game_state)
             if option:
-                # Apply follow/stay command to selected female humans
-                for human in self.game_state.human_list:
-                    if human.selected and human.gender == "female":
-                        human.state = option
+                if option == "auto":
+                    # Set to automated behavior (work if employed, wander if not)
+                    for human in self.game_state.human_list:
+                        if human.selected and human.gender == "female":
+                            if human.is_employed:
+                                human.state = "employed"
+                                # Restore harvest_target from work_target if work_target exists
+                                if human.work_target and not human.harvest_target:
+                                    human.harvest_target = human.work_target
+                                    # Reset harvest position so it gets recalculated
+                                    human.harvest_position = None
+                                    human.harvest_timer = 0.0
+                            else:
+                                # Unemployed - set to wander
+                                human.state = "wander"
+                                human.wander_timer = 0.0
+                                human.wander_duration = 0.0
+                                human.wander_direction = None
+                                human.wander_target_x = None
+                                human.wander_target_y = None
+                                human.is_wandering = False
+                else:
+                    # Apply follow/stay command to selected female humans
+                    for human in self.game_state.human_list:
+                        if human.selected and human.gender == "female":
+                            human.state = option
                 clicked_menu = True
                 self.game_state.show_female_human_context_menu = False
         
@@ -240,6 +321,9 @@ class InputSystem:
             elif option == "build_ironyard":
                 self.game_state.build_mode = True
                 self.game_state.build_mode_type = "ironyard"
+            elif option == "build_hut":
+                self.game_state.build_mode = True
+                self.game_state.build_mode_type = "hut"
             self.game_state.show_player_context_menu = False
             return True
         return False
@@ -289,7 +373,7 @@ class InputSystem:
             pen_x = mouse_x - PEN_SIZE // 2
             pen_y = mouse_y - PEN_SIZE // 2
             pen_x = max(0, min(pen_x, SCREEN_WIDTH - PEN_SIZE))
-            pen_y = max(0, min(pen_y, SCREEN_HEIGHT - PEN_SIZE))
+            pen_y = max(PLAYABLE_AREA_TOP, min(pen_y, PLAYABLE_AREA_BOTTOM - PEN_SIZE))
             
             if self._check_placement_valid(pen_x, pen_y, PEN_SIZE, PEN_SIZE):
                 self.game_state.pen_list.append(Pen(pen_x, pen_y, PEN_SIZE, self.game_state.pen_rotation))
@@ -301,7 +385,7 @@ class InputSystem:
             townhall_x = mouse_x - TOWNHALL_WIDTH // 2
             townhall_y = mouse_y - TOWNHALL_HEIGHT // 2
             townhall_x = max(0, min(townhall_x, SCREEN_WIDTH - TOWNHALL_WIDTH))
-            townhall_y = max(0, min(townhall_y, SCREEN_HEIGHT - TOWNHALL_HEIGHT))
+            townhall_y = max(PLAYABLE_AREA_TOP, min(townhall_y, PLAYABLE_AREA_BOTTOM - TOWNHALL_HEIGHT))
             
             if self._check_placement_valid(townhall_x, townhall_y, TOWNHALL_WIDTH, TOWNHALL_HEIGHT):
                 self.game_state.townhall_list.append(TownHall(townhall_x, townhall_y, self.game_state.pen_rotation))
@@ -313,7 +397,7 @@ class InputSystem:
             lumberyard_x = mouse_x - LUMBERYARD_WIDTH // 2
             lumberyard_y = mouse_y - LUMBERYARD_HEIGHT // 2
             lumberyard_x = max(0, min(lumberyard_x, SCREEN_WIDTH - LUMBERYARD_WIDTH))
-            lumberyard_y = max(0, min(lumberyard_y, SCREEN_HEIGHT - LUMBERYARD_HEIGHT))
+            lumberyard_y = max(PLAYABLE_AREA_TOP, min(lumberyard_y, PLAYABLE_AREA_BOTTOM - LUMBERYARD_HEIGHT))
             
             if self._check_placement_valid(lumberyard_x, lumberyard_y, LUMBERYARD_WIDTH, LUMBERYARD_HEIGHT):
                 self.game_state.lumber_yard_list.append(LumberYard(lumberyard_x, lumberyard_y, self.game_state.pen_rotation))
@@ -325,7 +409,7 @@ class InputSystem:
             stoneyard_x = mouse_x - STONEYARD_WIDTH // 2
             stoneyard_y = mouse_y - STONEYARD_HEIGHT // 2
             stoneyard_x = max(0, min(stoneyard_x, SCREEN_WIDTH - STONEYARD_WIDTH))
-            stoneyard_y = max(0, min(stoneyard_y, SCREEN_HEIGHT - STONEYARD_HEIGHT))
+            stoneyard_y = max(PLAYABLE_AREA_TOP, min(stoneyard_y, PLAYABLE_AREA_BOTTOM - STONEYARD_HEIGHT))
             
             if self._check_placement_valid(stoneyard_x, stoneyard_y, STONEYARD_WIDTH, STONEYARD_HEIGHT):
                 self.game_state.stone_yard_list.append(StoneYard(stoneyard_x, stoneyard_y, self.game_state.pen_rotation))
@@ -337,16 +421,46 @@ class InputSystem:
             ironyard_x = mouse_x - IRONYARD_WIDTH // 2
             ironyard_y = mouse_y - IRONYARD_HEIGHT // 2
             ironyard_x = max(0, min(ironyard_x, SCREEN_WIDTH - IRONYARD_WIDTH))
-            ironyard_y = max(0, min(ironyard_y, SCREEN_HEIGHT - IRONYARD_HEIGHT))
+            ironyard_y = max(PLAYABLE_AREA_TOP, min(ironyard_y, PLAYABLE_AREA_BOTTOM - IRONYARD_HEIGHT))
             
             if self._check_placement_valid(ironyard_x, ironyard_y, IRONYARD_WIDTH, IRONYARD_HEIGHT):
                 self.game_state.iron_yard_list.append(IronYard(ironyard_x, ironyard_y, self.game_state.pen_rotation))
                 self.game_state.build_mode = False
                 self.game_state.build_mode_type = None
                 self.game_state.pen_rotation = 0
+            
+        elif self.game_state.build_mode_type == "hut":
+            from entities.hut import Hut
+            hut_x = mouse_x - HUT_SIZE // 2
+            hut_y = mouse_y - HUT_SIZE // 2
+            hut_x = max(0, min(hut_x, SCREEN_WIDTH - HUT_SIZE))
+            hut_y = max(PLAYABLE_AREA_TOP, min(hut_y, PLAYABLE_AREA_BOTTOM - HUT_SIZE))
+            
+            if self._check_placement_valid(hut_x, hut_y, HUT_SIZE, HUT_SIZE):
+                self.game_state.hut_list.append(Hut(hut_x, hut_y))
+                self.game_state.build_mode = False
+                self.game_state.build_mode_type = None
     
     def _handle_right_click(self, mouse_x, mouse_y):
         """Handle right click - show context menus"""
+        # First check if clicking on a town hall (but not if in build mode)
+        if not self.game_state.build_mode:
+            clicked_townhall = None
+            for townhall in self.game_state.townhall_list:
+                if townhall.contains_point(mouse_x, mouse_y):
+                    clicked_townhall = townhall
+                    break
+            
+            if clicked_townhall and self.employment_menu:
+                # Show employment menu for this town hall
+                self.employment_menu.show(clicked_townhall, mouse_x, mouse_y)
+                # Hide all other context menus
+                self.game_state.show_context_menu = False
+                self.game_state.show_male_human_context_menu = False
+                self.game_state.show_female_human_context_menu = False
+                self.game_state.show_player_context_menu = False
+                return
+        
         any_sheep_selected = self.game_state.any_sheep_selected()
         any_male_human_selected = self.game_state.any_male_human_selected()
         any_female_human_selected = self.game_state.any_female_human_selected()
@@ -355,11 +469,17 @@ class InputSystem:
             # Calculate how many menus we'll show
             current_x_offset = mouse_x
             
+            # Calculate maximum menu height (in case Auto option appears)
+            max_menu_height = 120  # Maximum height if Auto appears
+            
+            # Clamp menu Y position to playable area
+            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - max_menu_height))
+            
             # Show sheep menu if sheep selected
             if any_sheep_selected:
                 self.game_state.show_context_menu = True
                 self.game_state.context_menu_x = current_x_offset
-                self.game_state.context_menu_y = mouse_y
+                self.game_state.context_menu_y = menu_y
                 current_x_offset += 145  # Width of sheep menu + spacing
             else:
                 self.game_state.show_context_menu = False
@@ -368,7 +488,7 @@ class InputSystem:
             if any_male_human_selected:
                 self.game_state.show_male_human_context_menu = True
                 self.game_state.male_human_context_menu_x = current_x_offset
-                self.game_state.male_human_context_menu_y = mouse_y
+                self.game_state.male_human_context_menu_y = menu_y
                 current_x_offset += 125  # Width of human menu + spacing
             else:
                 self.game_state.show_male_human_context_menu = False
@@ -377,33 +497,73 @@ class InputSystem:
             if any_female_human_selected:
                 self.game_state.show_female_human_context_menu = True
                 self.game_state.female_human_context_menu_x = current_x_offset
-                self.game_state.female_human_context_menu_y = mouse_y
+                self.game_state.female_human_context_menu_y = menu_y
             else:
                 self.game_state.show_female_human_context_menu = False
             
             self.game_state.show_player_context_menu = False
         else:
-            # Show player context menu
+            # Show player context menu - clamp to playable area
+            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - 190))
             self.game_state.show_context_menu = False
             self.game_state.show_male_human_context_menu = False
             self.game_state.show_female_human_context_menu = False
             self.game_state.show_player_context_menu = True
             self.game_state.player_context_menu_x = mouse_x
-            self.game_state.player_context_menu_y = mouse_y
+            self.game_state.player_context_menu_y = menu_y
+        
+        # Hide employment menu when showing other context menus
+        if self.employment_menu:
+            self.employment_menu.hide()
     
     def _handle_mouse_up(self, event):
         """Handle mouse button release"""
         if event.button == 1 and self.game_state.box_selecting:
             self._complete_box_selection()
     
+    def _try_select_entity(self, mouse_x, mouse_y):
+        """Try to select a single entity at the click position. Returns True if an entity was clicked."""
+        # Check humans first (they're typically on top)
+        for human in reversed(self.game_state.human_list):  # Reverse to check top entities first
+            if human.contains_point(mouse_x, mouse_y):
+                # Single click selection - deselect all, then select this one
+                for h in self.game_state.human_list:
+                    h.selected = False
+                for s in self.game_state.sheep_list:
+                    s.selected = False
+                human.selected = True
+                return True
+        
+        # Check sheep
+        for sheep in reversed(self.game_state.sheep_list):
+            if sheep.contains_point(mouse_x, mouse_y):
+                # Single click selection - deselect all, then select this one
+                for h in self.game_state.human_list:
+                    h.selected = False
+                for s in self.game_state.sheep_list:
+                    s.selected = False
+                sheep.selected = True
+                return True
+        
+        return False
+    
     def _complete_box_selection(self):
         """Complete box selection and select entities"""
-        self.game_state.box_selecting = False
-        
+        # Check if this was a click vs drag (very small box = click)
         min_x = min(self.game_state.box_start_x, self.game_state.box_end_x)
         max_x = max(self.game_state.box_start_x, self.game_state.box_end_x)
         min_y = min(self.game_state.box_start_y, self.game_state.box_end_y)
         max_y = max(self.game_state.box_start_y, self.game_state.box_end_y)
+        box_width = max_x - min_x
+        box_height = max_y - min_y
+        
+        # If box is very small (click, not drag), try single entity selection
+        if box_width < 5 and box_height < 5:
+            if self._try_select_entity(min_x, min_y):
+                self.game_state.box_selecting = False
+                return
+        
+        self.game_state.box_selecting = False
         
         # Select sheep in box
         for sheep in self.game_state.sheep_list:
@@ -440,9 +600,9 @@ class InputSystem:
                 return "gender_separate"
         return None
     
-    def _check_male_human_context_menu_click(self, mx, my):
+    def _check_male_human_context_menu_click(self, mx, my, game_state):
         """Check if clicking on male human context menu"""
-        context_menu_height = 90  # Males have harvest option
+        context_menu_height = 120  # Follow, Stay, Harvest, Auto (always shown)
         context_menu_width = 100
         x = self.game_state.male_human_context_menu_x
         y = self.game_state.male_human_context_menu_y
@@ -451,18 +611,21 @@ class InputSystem:
             # Title area is y to y+20
             # Follow: y+20 to y+50
             # Stay: y+50 to y+77
-            # Harvest: y+77 to y+90
+            # Harvest: y+77 to y+104
+            # Auto: y+104 to y+120
             if y + 20 <= my <= y + 50:
                 return "follow"
             elif y + 50 <= my <= y + 77:
                 return "stay"
-            elif y + 77 <= my <= y + context_menu_height:
+            elif y + 77 <= my <= y + 104:
                 return "harvest"
+            elif y + 104 <= my <= y + context_menu_height:
+                return "auto"
         return None
     
-    def _check_female_human_context_menu_click(self, mx, my):
+    def _check_female_human_context_menu_click(self, mx, my, game_state):
         """Check if clicking on female human context menu"""
-        context_menu_height = 70  # Females don't have harvest option
+        context_menu_height = 100  # Follow, Stay, Auto (always shown)
         context_menu_width = 100
         x = self.game_state.female_human_context_menu_x
         y = self.game_state.female_human_context_menu_y
@@ -470,17 +633,20 @@ class InputSystem:
         if x <= mx <= x + context_menu_width:
             # Title area is y to y+20
             # Follow: y+20 to y+50
-            # Stay: y+50 to y+70
+            # Stay: y+50 to y+77
+            # Auto: y+77 to y+100
             if y + 20 <= my <= y + 50:
                 return "follow"
-            elif y + 50 <= my <= y + context_menu_height:
+            elif y + 50 <= my <= y + 77:
                 return "stay"
+            elif y + 77 <= my <= y + context_menu_height:
+                return "auto"
         return None
     
     def _check_player_menu_click(self, mx, my):
         """Check if clicking on player context menu"""
         context_menu_width = 160
-        context_menu_height = 150  # Increased for 5 options
+        context_menu_height = 180  # Increased for 6 options (including hut)
         x = self.game_state.player_context_menu_x
         y = self.game_state.player_context_menu_y
         
@@ -493,6 +659,8 @@ class InputSystem:
                 return "build_lumberyard"
             elif y + 90 <= my <= y + 120:
                 return "build_stoneyard"
-            elif y + 120 <= my <= y + context_menu_height:
+            elif y + 120 <= my <= y + 150:
                 return "build_ironyard"
+            elif y + 150 <= my <= y + context_menu_height:
+                return "build_hut"
         return None

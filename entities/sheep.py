@@ -287,12 +287,19 @@ class Sheep:
     
     def _apply_movement(self, dx, dy, dist, pen_list, townhall_list, sheep_list):
         """Apply movement with collision detection"""
+        from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+        from utils.geometry import clamp
+        
         dx = (dx / dist) * self.speed
         dy = (dy / dist) * self.speed
         
         old_x, old_y = self.x, self.y
         self.x += dx
         self.y += dy
+        
+        # Keep within playable area bounds
+        self.x = clamp(self.x, 0, SCREEN_WIDTH - self.width)
+        self.y = clamp(self.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - self.height)
         
         # Check collisions
         if self._check_all_collisions(pen_list, townhall_list):

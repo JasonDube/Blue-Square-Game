@@ -20,6 +20,7 @@ class GameState:
         self.lumber_yard_list = []
         self.stone_yard_list = []
         self.iron_yard_list = []
+        self.hut_list = []
         self.tree_list = []
         self.rock_list = []
         self.iron_mine_list = []
@@ -32,7 +33,7 @@ class GameState:
         # UI state
         self.debug_mode = False
         self.build_mode = False
-        self.build_mode_type = None  # "pen", "townhall", "lumberyard", "stoneyard", "ironyard"
+        self.build_mode_type = None  # "pen", "townhall", "lumberyard", "stoneyard", "ironyard", "hut"
         self.pen_rotation = 0  # 0 = top, 1 = right, 2 = bottom, 3 = left
         
         # Selection state

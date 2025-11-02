@@ -1,12 +1,12 @@
 """
-TownHall entity - rectangular building structure
+TownHall entity - rectangular building structure and employment center
 """
 import pygame
 from constants import *
 
 
 class TownHall:
-    """Town hall building with toggle-able collision"""
+    """Town hall building with toggle-able collision and employment management"""
     
     def __init__(self, x, y, rotation=0):
         self.x = x
@@ -15,6 +15,13 @@ class TownHall:
         self.height = TOWNHALL_HEIGHT
         self.collision_enabled = True
         self.rotation = rotation  # 0 = top, 1 = right, 2 = bottom, 3 = left
+        
+        # Employment tracking
+        self.employed_humans = []  # List of humans employed at this town hall
+        self.job_slots = {
+            'lumberjack': {'max': 5, 'filled': 0},  # Can have up to 5 lumberjacks
+            # Future: 'farmer': {'max': 3, 'filled': 0}, etc.
+        }
     
     def get_button_pos(self):
         """Get the position of the button on the front wall"""
@@ -55,6 +62,43 @@ class TownHall:
         townhall_rect = pygame.Rect(self.x, self.y, self.width, self.height)
         return sheep_rect.colliderect(townhall_rect)
     
+    def can_hire(self, job_type):
+        """Check if there's room to hire for a specific job"""
+        if job_type not in self.job_slots:
+            return False
+        job = self.job_slots[job_type]
+        return job['filled'] < job['max']
+    
+    def hire_human(self, human, job_type):
+        """Hire a human for a specific job"""
+        if not self.can_hire(job_type):
+            return False
+        
+        self.employed_humans.append(human)
+        self.job_slots[job_type]['filled'] += 1
+        human.job = job_type
+        human.employer = self
+        human.state = "employed"
+        return True
+    
+    def fire_human(self, human):
+        """Fire a human from their job"""
+        if human not in self.employed_humans:
+            return False
+        
+        self.employed_humans.remove(human)
+        if human.job in self.job_slots:
+            self.job_slots[human.job]['filled'] -= 1
+        human.job = None
+        human.employer = None
+        human.state = "stay"
+        return True
+    
+    def contains_point(self, px, py):
+        """Check if a point is inside the town hall"""
+        return (self.x <= px <= self.x + self.width and 
+                self.y <= py <= self.y + self.height)
+    
     def draw(self, screen, preview=False, resource_system=None):
         """Draw the town hall"""
         color = TAN if not preview else GRAY
@@ -65,6 +109,7 @@ class TownHall:
         pygame.draw.rect(screen, BLACK, (self.x, self.y, self.width, self.height), 2)
         
         # Draw stored resources if not preview and resource system exists
+        # Town halls only store wool and meat (logs/stones/iron have dedicated buildings)
         if not preview and resource_system:
             self._draw_stored_resources(screen, resource_system)
         
@@ -75,10 +120,17 @@ class TownHall:
     
     def _draw_stored_resources(self, screen, resource_system):
         """Draw visual representation of stored resources"""
-        from systems.resource_system import ResourceVisualizer
+        from systems.resource_system import ResourceVisualizer, ResourceType
         
-        resources = resource_system.get_all_resources()
-        positions = ResourceVisualizer.calculate_storage_positions(self, resources)
+        # Town halls only store resources WITHOUT dedicated buildings (wool, meat)
+        # Logs, stones, and iron have their own storage buildings
+        all_resources = resource_system.get_all_resources()
+        townhall_resources = {
+            ResourceType.WOOL: all_resources.get(ResourceType.WOOL, 0),
+            ResourceType.MEAT: all_resources.get(ResourceType.MEAT, 0)
+        }
+        
+        positions = ResourceVisualizer.calculate_storage_positions(self, townhall_resources)
         
         for resource_type, x, y, visual in positions:
             if visual['shape'] == 'rect':

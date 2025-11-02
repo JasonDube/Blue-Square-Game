@@ -5,8 +5,9 @@ import pygame
 import sys
 from constants import *
 from managers.game_state import GameState
-from systems import CollisionSystem, DayCycleSystem, InputSystem, HarvestSystem, ResourceSystem
-from ui import ContextMenuRenderer, BuildModeRenderer, HUD
+from systems import CollisionSystem, DayCycleSystem, InputSystem, HarvestSystem, ResourceSystem, EmploymentSystem
+from systems.human_behavior_system import HumanBehaviorSystem
+from ui import ContextMenuRenderer, BuildModeRenderer, HUD, HUDLow, EmploymentMenu
 from utils.world_generator import WorldGenerator
 from utils.geometry import clamp
 
@@ -28,12 +29,18 @@ class Game:
         self.day_cycle = DayCycleSystem()
         self.resource_system = ResourceSystem()
         self.harvest_system = HarvestSystem(self.resource_system)
-        self.input_system = InputSystem(self.game_state, self.harvest_system)
+        self.employment_system = EmploymentSystem(self.resource_system)
+        self.human_behavior_system = HumanBehaviorSystem()
         
         # Initialize UI renderers
         self.context_menu_renderer = ContextMenuRenderer()
         self.build_mode_renderer = BuildModeRenderer()
         self.hud = HUD()
+        self.hud_low = HUDLow()
+        self.employment_menu = EmploymentMenu()
+        
+        # Initialize input system (after UI so we can pass employment_menu)
+        self.input_system = InputSystem(self.game_state, self.harvest_system, self.employment_menu)
         
         # Initialize world
         self._initialize_world()
@@ -105,9 +112,15 @@ class Game:
         # Update harvest system
         self.harvest_system.update(dt, self.game_state)
         
+        # Update employment system (must be after harvest system to avoid conflicts)
+        self.employment_system.update(dt, self.game_state)
+        
+        # Update human behavior system (wandering, sleep)
+        self.human_behavior_system.update(dt, self.game_state, self.day_cycle)
+        
         # Update entities
         self._update_sheep(dt)
-        self._update_humans()
+        self._update_humans(dt)
     
     def _update_player(self):
         """Update player position based on keyboard input"""
@@ -125,9 +138,9 @@ class Game:
         if keys[pygame.K_DOWN]:
             self.game_state.player_y += PLAYER_SPEED
         
-        # Keep within bounds
+        # Keep within playable area bounds (between HUDs)
         self.game_state.player_x = clamp(self.game_state.player_x, 0, SCREEN_WIDTH - PLAYER_SIZE)
-        self.game_state.player_y = clamp(self.game_state.player_y, 0, SCREEN_HEIGHT - PLAYER_SIZE)
+        self.game_state.player_y = clamp(self.game_state.player_y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - PLAYER_SIZE)
         
         # Check collision
         if self.collision_system.check_player_collision(
@@ -163,7 +176,7 @@ class Game:
                 self.game_state.townhall_list
             )
     
-    def _update_humans(self):
+    def _update_humans(self, dt):
         """Update all humans"""
         player_center_x = self.game_state.player_x + PLAYER_SIZE / 2
         player_center_y = self.game_state.player_y + PLAYER_SIZE / 2
@@ -178,6 +191,8 @@ class Game:
                 self.game_state.townhall_list,
                 self.game_state.sheep_list
             )
+            # Update happiness
+            human.update_happiness(dt, self.game_state)
     
     def _render(self):
         """Render all game elements"""
@@ -210,7 +225,10 @@ class Game:
         show_health = self.harvest_system.harvest_cursor_active
         for tree in self.game_state.tree_list:
             if not tree.is_depleted():
-                tree.draw(self.screen, show_health=show_health)
+                # Only draw if tree is within playable area (above bottom HUD)
+                tree_bottom = tree.y
+                if tree_bottom < PLAYABLE_AREA_BOTTOM:
+                    tree.draw(self.screen, show_health=show_health)
         
         # Draw rocks
         for rock in self.game_state.rock_list:
@@ -241,6 +259,10 @@ class Game:
         # Draw iron yards
         for iron_yard in self.game_state.iron_yard_list:
             iron_yard.draw(self.screen, preview=False)
+        
+        # Draw huts
+        for hut in self.game_state.hut_list:
+            hut.draw(self.screen, preview=False)
     
     def _draw_entities(self):
         """Draw sheep and humans"""
@@ -266,12 +288,19 @@ class Game:
         # Draw context menus
         self.context_menu_renderer.draw_all(self.screen, self.game_state)
         
+        # Draw employment menu
+        self.employment_menu.draw(self.screen, self.game_state)
+        
         # Draw harvest UI (messages and cursor)
         self.harvest_system.draw_harvest_ui(self.screen)
         self.harvest_system.draw_harvest_cursor(self.screen)
         
-        # Draw HUD (must be last to be on top)
+        # Draw HUDs (must be last to be on top)
         self.hud.draw(self.screen, self.game_state, self.day_cycle, self.resource_system)
+        self.hud_low.draw(self.screen, self.game_state)
+        
+        # Draw darkness overlay for dusk/dawn (on top of everything)
+        self._draw_darkness_overlay()
     
     def _draw_player(self):
         """Draw the player square"""
@@ -280,6 +309,16 @@ class Game:
             BLUE, 
             (self.game_state.player_x, self.game_state.player_y, PLAYER_SIZE, PLAYER_SIZE)
         )
+    
+    def _draw_darkness_overlay(self):
+        """Draw darkness overlay for dusk/dawn transition"""
+        alpha = self.day_cycle.get_darkness_overlay_alpha()
+        if alpha > 0:
+            # Create a semi-transparent black surface
+            overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+            overlay.set_alpha(alpha)
+            overlay.fill(BLACK)
+            self.screen.blit(overlay, (0, 0))
     
     def _cleanup(self):
         """Cleanup and exit"""

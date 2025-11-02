@@ -15,6 +15,37 @@ from entities.rock import Rock
 from entities.ironmine import IronMine
 
 
+# Medieval RPG-style names
+MALE_FIRST_NAMES = [
+    "Gunthar", "Aldric", "Thorin", "Bram", "Cedric", "Darian", "Eldric", "Falken",
+    "Gareth", "Haldor", "Ivor", "Jareth", "Korbin", "Loric", "Marek", "Nolan",
+    "Osric", "Percival", "Quinn", "Roland"
+]
+
+FEMALE_FIRST_NAMES = [
+    "Elara", "Lyra", "Isolde", "Gwendolyn", "Morgana", "Astrid", "Rowan", "Freyja",
+    "Aurelia", "Cassandra", "Diana", "Elena", "Helena", "Iris", "Jade", "Kira",
+    "Luna", "Miranda", "Nora", "Ophelia"
+]
+
+LAST_NAMES = [
+    "Wildwood", "Ironforge", "Blackstone", "Silverbrook", "Grimward", "Brightshield",
+    "Stormwind", "Shadowmere", "Goldleaf", "Steelhammer", "Moonwhisper", "Firebrand",
+    "Thornblade", "Stoneheart", "Riversong", "Frostbeard", "Dragonblood", "Swiftarrow",
+    "Oakheart", "Darkmoon"
+]
+
+
+def generate_human_name(gender):
+    """Generate a random name for a human based on gender"""
+    if gender == "male":
+        first_name = random.choice(MALE_FIRST_NAMES)
+    else:
+        first_name = random.choice(FEMALE_FIRST_NAMES)
+    last_name = random.choice(LAST_NAMES)
+    return f"{first_name} {last_name}"
+
+
 class WorldGenerator:
     """Generates initial game world"""
     
@@ -74,8 +105,7 @@ class WorldGenerator:
                             break
                 
                 if valid:
-                    # Use default health from constants
-                    rock_list.append(Rock(rock_x, rock_y))
+                    rock_list.append(Rock(rock_x, rock_y, health=200))
                     break
                 
                 attempts += 1
@@ -116,12 +146,9 @@ class WorldGenerator:
                         break
             
             if valid:
-                # Use default health from constants
-                return IronMine(mine_x, mine_y)
+                return IronMine(mine_x, mine_y, health=1000)
         
-        # If we couldn't find a good spot, force one in a safe area
-        # Use default health from constants
-        return IronMine(SCREEN_WIDTH - 150, SCREEN_HEIGHT - 150)
+        return None  # Couldn't find valid position
     
     @staticmethod
     def _is_valid_resource_position(x, y, existing_resources, pen_list):
@@ -164,20 +191,13 @@ class WorldGenerator:
             Sheep(350, 320, "female")
         ]
         
-        # Create initial humans - LOTS of male workers for testing!
+        # Create initial humans - more of them for testing!
         human_list = [
-            # Male workers (for harvesting)
-            Human(200, 200, "male"),
-            Human(250, 200, "male"),
-            Human(200, 250, "male"),
-            Human(250, 250, "male"),
-            Human(200, 100, "male"),
-            Human(250, 100, "male"),
-            Human(300, 200, "male"),
-            Human(350, 200, "male"),
-            # Female workers (for other tasks)
-            Human(200, 150, "female"),
-            Human(250, 150, "female"),
+            Human(200, 200, "male", name=generate_human_name("male")),
+            Human(250, 200, "female", name=generate_human_name("female")),
+            Human(200, 250, "male", name=generate_human_name("male")),
+            Human(250, 250, "female", name=generate_human_name("female")),
+            Human(200, 100, "male", name=generate_human_name("male"))
         ]
         
         return sheep_list, human_list, pen_list, lumber_yard_list, stone_yard_list, iron_yard_list
