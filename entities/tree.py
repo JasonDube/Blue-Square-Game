@@ -14,7 +14,7 @@ class Tree:
         self.trunk_width = TREE_TRUNK_WIDTH
         self.trunk_height = TREE_TRUNK_HEIGHT
         self.crown_radius = TREE_CROWN_RADIUS
-        self.health = TREE_INITIAL_HEALTH  # 100
+        self.health = TREE_INITIAL_HEALTH  # 20 logs per tree
         self.being_harvested = False
     
     def draw(self, screen, show_health=False):

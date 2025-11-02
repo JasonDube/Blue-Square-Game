@@ -21,8 +21,10 @@ class Human:
         # Harvest-related attributes
         self.harvest_target = None  # Resource being harvested
         self.harvest_timer = 0.0  # Time spent harvesting current resource
-        self.carrying_log = False  # Whether human is carrying a resource
+        self.carrying_resource = False  # Whether human is carrying a resource
         self.target_building = None  # Which building to deliver to
+        self.resource_type = None  # Type of resource being carried
+        self.harvest_position = None  # Position around resource (to prevent overlap)
     
     def draw(self, screen, debug_mode):
         """Draw the human based on gender"""
@@ -89,12 +91,23 @@ class Human:
         # Check collision with structures
         if self._check_structure_collisions(pen_list, townhall_list):
             self.x, self.y = old_x, old_y
+            return
         
-        # Check collision with other humans
+        # Check collision with other humans - with separation
         if other_humans:
             for other in other_humans:
                 if other != self and self.check_human_collision(other):
-                    self.x, self.y = old_x, old_y
+                    # Push away from each other slightly
+                    push_dx = self.x - other.x
+                    push_dy = self.y - other.y
+                    push_dist = distance(self.x, self.y, other.x, other.y)
+                    if push_dist > 0:
+                        push_dx = (push_dx / push_dist) * 2
+                        push_dy = (push_dy / push_dist) * 2
+                        self.x += push_dx
+                        self.y += push_dy
+                    else:
+                        self.x, self.y = old_x, old_y
                     break
     
     def _check_structure_collisions(self, pen_list, townhall_list):

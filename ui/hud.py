@@ -52,6 +52,7 @@ class HUD:
         resources_to_show = [
             (ResourceType.LOG, "Logs"),
             (ResourceType.STONE, "Stone"),
+            (ResourceType.IRON, "Iron"),
             (ResourceType.WOOL, "Wool"),
             (ResourceType.MEAT, "Meat")
         ]
@@ -59,8 +60,8 @@ class HUD:
         for resource_type, label in resources_to_show:
             count = resource_system.get_resource_count(resource_type)
             
-            # Only show if we have any of this resource
-            if count > 0:
+            # Always show resources (even if 0) for LOG, STONE, IRON
+            if resource_type in [ResourceType.LOG, ResourceType.STONE, ResourceType.IRON] or count > 0:
                 visual = ResourceVisualizer.get_resource_visual(resource_type)
                 
                 # Draw resource icon (scaled down to fit in HUD)

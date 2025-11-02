@@ -8,11 +8,11 @@ from constants import *
 class Rock:
     """Harvestable rock with health"""
     
-    def __init__(self, x, y, health=200):
+    def __init__(self, x, y, health=None):
         self.x = x
         self.y = y
         self.size = 12
-        self.health = health  # Number of harvests remaining
+        self.health = health if health is not None else ROCK_INITIAL_HEALTH  # 100 stones per rock
         self.being_harvested = False
     
     def draw(self, screen, show_health=False):
@@ -50,7 +50,7 @@ class Rock:
     def harvest(self):
         """Remove health from rock and return success"""
         if self.health > 0:
-            self.health -= 1
+            self.health -= ROCK_HEALTH_PER_HARVEST
             return True
         return False
     

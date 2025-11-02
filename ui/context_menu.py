@@ -110,8 +110,8 @@ class ContextMenuRenderer:
     
     def _draw_player_menu(self, screen, x, y):
         """Draw player context menu"""
-        width = 140
-        height = 90
+        width = 160
+        height = 150  # Increased for 5 options
         
         # Draw background
         pygame.draw.rect(screen, GRAY, (x, y, width, height))
@@ -121,11 +121,17 @@ class ContextMenuRenderer:
         build_pen_text = self.font.render("Build Pen", True, BLACK)
         build_townhall_text = self.font.render("Build Town Hall", True, BLACK)
         build_lumberyard_text = self.font.render("Build Lumber Yard", True, BLACK)
+        build_stoneyard_text = self.font.render("Build Stone Yard", True, BLACK)
+        build_ironyard_text = self.font.render("Build Iron Yard", True, BLACK)
         
         screen.blit(build_pen_text, (x + 10, y + 5))
         screen.blit(build_townhall_text, (x + 10, y + 32))
         screen.blit(build_lumberyard_text, (x + 10, y + 59))
+        screen.blit(build_stoneyard_text, (x + 10, y + 86))
+        screen.blit(build_ironyard_text, (x + 10, y + 113))
         
         # Draw separators
         pygame.draw.line(screen, BLACK, (x, y + 30), (x + width, y + 30), 1)
         pygame.draw.line(screen, BLACK, (x, y + 57), (x + width, y + 57), 1)
+        pygame.draw.line(screen, BLACK, (x, y + 84), (x + width, y + 84), 1)
+        pygame.draw.line(screen, BLACK, (x, y + 111), (x + width, y + 111), 1)

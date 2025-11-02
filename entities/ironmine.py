@@ -8,12 +8,12 @@ from constants import *
 class IronMine:
     """Harvestable iron mine with health"""
     
-    def __init__(self, x, y, health=1000):
+    def __init__(self, x, y, health=None):
         self.x = x
         self.y = y
         self.width = 30
         self.height = 30
-        self.health = health  # Number of harvests remaining
+        self.health = health if health is not None else IRONMINE_INITIAL_HEALTH  # 500 iron per mine
         self.being_harvested = False
     
     def draw(self, screen, show_health=False):
@@ -57,7 +57,7 @@ class IronMine:
     def harvest(self):
         """Remove health from mine and return success"""
         if self.health > 0:
-            self.health -= 1
+            self.health -= IRONMINE_HEALTH_PER_HARVEST
             return True
         return False
     

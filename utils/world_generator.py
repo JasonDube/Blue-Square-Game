@@ -74,7 +74,8 @@ class WorldGenerator:
                             break
                 
                 if valid:
-                    rock_list.append(Rock(rock_x, rock_y, health=200))
+                    # Use default health from constants
+                    rock_list.append(Rock(rock_x, rock_y))
                     break
                 
                 attempts += 1
@@ -115,9 +116,12 @@ class WorldGenerator:
                         break
             
             if valid:
-                return IronMine(mine_x, mine_y, health=1000)
+                # Use default health from constants
+                return IronMine(mine_x, mine_y)
         
-        return None  # Couldn't find valid position
+        # If we couldn't find a good spot, force one in a safe area
+        # Use default health from constants
+        return IronMine(SCREEN_WIDTH - 150, SCREEN_HEIGHT - 150)
     
     @staticmethod
     def _is_valid_resource_position(x, y, existing_resources, pen_list):
@@ -160,13 +164,20 @@ class WorldGenerator:
             Sheep(350, 320, "female")
         ]
         
-        # Create initial humans - more of them for testing!
+        # Create initial humans - LOTS of male workers for testing!
         human_list = [
+            # Male workers (for harvesting)
             Human(200, 200, "male"),
-            Human(250, 200, "female"),
-            Human(200, 250, "male"),    # Second male worker
-            Human(250, 250, "female"),  # Second female worker
-            Human(200, 100, "male")     # Third male worker for testing
+            Human(250, 200, "male"),
+            Human(200, 250, "male"),
+            Human(250, 250, "male"),
+            Human(200, 100, "male"),
+            Human(250, 100, "male"),
+            Human(300, 200, "male"),
+            Human(350, 200, "male"),
+            # Female workers (for other tasks)
+            Human(200, 150, "female"),
+            Human(250, 150, "female"),
         ]
         
         return sheep_list, human_list, pen_list, lumber_yard_list, stone_yard_list, iron_yard_list

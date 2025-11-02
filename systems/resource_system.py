@@ -8,6 +8,7 @@ class ResourceType:
     """Resource type definitions"""
     LOG = "log"
     STONE = "stone"
+    IRON = "iron"
     WOOL = "wool"
     MEAT = "meat"
 
@@ -20,6 +21,7 @@ class ResourceSystem:
         self.resources = {
             ResourceType.LOG: 0,
             ResourceType.STONE: 0,
+            ResourceType.IRON: 0,
             ResourceType.WOOL: 0,
             ResourceType.MEAT: 0
         }
@@ -66,6 +68,12 @@ class ResourceVisualizer:
             'width': 8,
             'height': 8,
             'color': GRAY,
+            'shape': 'circle'
+        },
+        ResourceType.IRON: {
+            'width': 6,
+            'height': 12,
+            'color': (200, 100, 50),  # Orange-brown for iron ore
             'shape': 'rect'
         },
         ResourceType.WOOL: {

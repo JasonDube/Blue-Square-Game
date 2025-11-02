@@ -54,8 +54,8 @@ IRONYARD_HEIGHT = 100
 
 # Building capacity (number of resources)
 LUMBERYARD_CAPACITY = 89
-STONEYARD_CAPACITY = 89
-IRONYARD_CAPACITY = 150
+STONEYARD_CAPACITY = 70  # Updated for visual fit
+IRONYARD_CAPACITY = 90   # Updated for visual fit
 
 # Herd settings
 HERD_BOUNDARY_SIZE = 100
@@ -84,14 +84,16 @@ GRASS_REGROWTH_MAX = 0.20
 GENDER_SEPARATION_DISTANCE = 30
 
 # Harvest settings
-HARVEST_TIME = 30  # seconds to harvest a tree
-HARVEST_TOOL_SIZE = 6  # size of harvest tool pixel
-TREE_INITIAL_HEALTH = 100  # percentage
-TREE_HEALTH_PER_HARVEST = 1  # percentage lost per harvest
+HARVEST_TIME = 3.0  # Seconds to harvest a resource
+HARVEST_TOOL_SIZE = 4  # Size of harvest tool visual
+
+# Resource health (number of units each resource contains)
+TREE_INITIAL_HEALTH = 20       # Updated: 20 logs per tree
+ROCK_INITIAL_HEALTH = 100      # Updated: 100 stones per rock
+IRONMINE_INITIAL_HEALTH = 500  # Updated: 500 iron per mine
+TREE_HEALTH_PER_HARVEST = 1    # 1 unit lost per harvest
+ROCK_HEALTH_PER_HARVEST = 1    # 1 unit lost per harvest
+IRONMINE_HEALTH_PER_HARVEST = 1  # 1 unit lost per harvest
 
 # FPS
 FPS = 60
-
-# Resource settings
-HARVEST_TIME = 3.0  # Seconds to harvest a tree
-HARVEST_TOOL_SIZE = 4  # Size of harvest tool visual
