@@ -19,9 +19,10 @@ class Human:
         self.gender = gender  # "male" or "female"
         
         # Harvest-related attributes
-        self.harvest_target = None  # Tree being harvested
-        self.harvest_timer = 0.0  # Time spent harvesting current tree
-        self.carrying_log = False  # Whether human is carrying a log to town hall
+        self.harvest_target = None  # Resource being harvested
+        self.harvest_timer = 0.0  # Time spent harvesting current resource
+        self.carrying_log = False  # Whether human is carrying a resource
+        self.target_building = None  # Which building to deliver to
     
     def draw(self, screen, debug_mode):
         """Draw the human based on gender"""

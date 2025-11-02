@@ -5,6 +5,7 @@ import pygame
 from constants import *
 from entities.pen import Pen
 from entities.townhall import TownHall
+from entities.lumberyard import LumberYard
 
 
 class InputSystem:
@@ -177,6 +178,9 @@ class InputSystem:
             elif option == "build_townhall":
                 self.game_state.build_mode = True
                 self.game_state.build_mode_type = "townhall"
+            elif option == "build_lumberyard":
+                self.game_state.build_mode = True
+                self.game_state.build_mode_type = "lumberyard"
             self.game_state.show_player_context_menu = False
             return True
         return False
@@ -197,6 +201,13 @@ class InputSystem:
                 townhall.collision_enabled = not townhall.collision_enabled
                 return True
         
+        # Check lumber yard buttons
+        for lumber_yard in self.game_state.lumber_yard_list:
+            button_rect = lumber_yard.get_button_rect()
+            if button_rect.collidepoint(mouse_x, mouse_y):
+                lumber_yard.collision_enabled = not lumber_yard.collision_enabled
+                return True
+        
         return False
     
     def _place_structure(self, mouse_x, mouse_y):
@@ -213,6 +224,12 @@ class InputSystem:
             townhall_x = max(0, min(townhall_x, SCREEN_WIDTH - TOWNHALL_WIDTH))
             townhall_y = max(0, min(townhall_y, SCREEN_HEIGHT - TOWNHALL_HEIGHT))
             self.game_state.townhall_list.append(TownHall(townhall_x, townhall_y, self.game_state.pen_rotation))
+        elif self.game_state.build_mode_type == "lumberyard":
+            lumberyard_x = mouse_x - LUMBERYARD_WIDTH // 2
+            lumberyard_y = mouse_y - LUMBERYARD_HEIGHT // 2
+            lumberyard_x = max(0, min(lumberyard_x, SCREEN_WIDTH - LUMBERYARD_WIDTH))
+            lumberyard_y = max(0, min(lumberyard_y, SCREEN_HEIGHT - LUMBERYARD_HEIGHT))
+            self.game_state.lumber_yard_list.append(LumberYard(lumberyard_x, lumberyard_y, self.game_state.pen_rotation))
         
         self.game_state.build_mode = False
         self.game_state.build_mode_type = None
@@ -353,13 +370,15 @@ class InputSystem:
     def _check_player_menu_click(self, mx, my):
         """Check if clicking on player context menu"""
         context_menu_width = 140
-        context_menu_height = 60
+        context_menu_height = 90
         x = self.game_state.player_context_menu_x
         y = self.game_state.player_context_menu_y
         
         if x <= mx <= x + context_menu_width:
             if y <= my <= y + 30:
                 return "build_pen"
-            elif y + 30 <= my <= y + context_menu_height:
+            elif y + 30 <= my <= y + 60:
                 return "build_townhall"
+            elif y + 60 <= my <= y + context_menu_height:
+                return "build_lumberyard"
         return None

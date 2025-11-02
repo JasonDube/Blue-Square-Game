@@ -14,7 +14,7 @@ class Tree:
         self.trunk_width = TREE_TRUNK_WIDTH
         self.trunk_height = TREE_TRUNK_HEIGHT
         self.crown_radius = TREE_CROWN_RADIUS
-        self.health = TREE_INITIAL_HEALTH  # 100%
+        self.health = TREE_INITIAL_HEALTH  # 100
         self.being_harvested = False
     
     def draw(self, screen, show_health=False):
@@ -35,10 +35,10 @@ class Tree:
         crown_y = self.y - self.trunk_height
         pygame.draw.circle(screen, DARK_GREEN, (self.x, crown_y), self.crown_radius)
         
-        # Draw health percentage if in harvest mode
+        # Draw health number if in harvest mode
         if show_health:
             font = pygame.font.Font(None, 20)
-            health_text = f"{int(self.health)}%"
+            health_text = f"{int(self.health)}"
             text_surface = font.render(health_text, True, WHITE)
             text_rect = text_surface.get_rect(center=(self.x, crown_y - self.crown_radius - 10))
             # Draw black background for readability

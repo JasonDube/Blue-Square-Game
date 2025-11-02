@@ -119,11 +119,8 @@ class ResourceVisualizer:
             
             visual = ResourceVisualizer.get_resource_visual(resource_type)
             
-            # Calculate how many items can fit
-            items_to_show = min(count, 50)  # Cap visual display at 50 items
-            
-            # Stack items
-            for i in range(items_to_show):
+            # Stack items - show all of them
+            for i in range(count):
                 # Check if we need to move to next row
                 if current_x + visual['width'] > storage_x + storage_width:
                     current_x = storage_x

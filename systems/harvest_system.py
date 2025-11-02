@@ -58,38 +58,39 @@ class HarvestSystem:
     
     def _update_harvesting_human(self, human, dt, game_state):
         """Update a human that is harvesting"""
-        # Check if target tree is still valid
+        # Check if target resource is still valid
         if human.harvest_target and human.harvest_target.is_depleted():
-            # Tree depleted, stop harvesting
+            # Resource depleted, stop harvesting
             human.state = "stay"
             human.harvest_target = None
             human.harvest_timer = 0.0
             human.carrying_log = False
+            human.target_building = None
             return
         
         if human.carrying_log:
-            # Human is carrying a log, go to town hall
-            self._return_to_townhall(human, game_state)
+            # Human is carrying a resource, go to building
+            self._return_to_building(human, game_state)
         elif human.harvest_target:
-            # Human is at tree, harvest it
-            self._harvest_tree(human, dt, game_state)
+            # Human is at resource, harvest it
+            self._harvest_resource(human, dt, game_state)
     
-    def _harvest_tree(self, human, dt, game_state):
-        """Human harvests the tree"""
-        tree = human.harvest_target
+    def _harvest_resource(self, human, dt, game_state):
+        """Human harvests the resource"""
+        resource = human.harvest_target
         
-        # Move to tree
+        # Move to resource
         dist = distance(
             human.x + human.size/2, 
             human.y + human.size/2,
-            tree.x,
-            tree.y
+            resource.x,
+            resource.y
         )
         
-        if dist > 25:  # Not at tree yet
-            # Move towards tree
-            dx = tree.x - (human.x + human.size/2)
-            dy = tree.y - (human.y + human.size/2)
+        if dist > 25:  # Not at resource yet
+            # Move towards resource
+            dx = resource.x - (human.x + human.size/2)
+            dy = resource.y - (human.y + human.size/2)
             dx = (dx / dist) * human.speed
             dy = (dy / dist) * human.speed
             
@@ -101,40 +102,41 @@ class HarvestSystem:
             if self._check_collisions(human, game_state):
                 human.x, human.y = old_x, old_y
         else:
-            # At tree, harvest it
-            tree.being_harvested = True
+            # At resource, harvest it
+            resource.being_harvested = True
             human.harvest_timer += dt
             
             if human.harvest_timer >= HARVEST_TIME:
                 # Finished harvesting
-                tree.harvest()
-                tree.being_harvested = False
+                resource.harvest()
+                resource.being_harvested = False
                 human.harvest_timer = 0.0
                 human.carrying_log = True
     
-    def _return_to_townhall(self, human, game_state):
-        """Human returns to town hall to deposit log"""
-        # Find nearest town hall
-        townhall = self._find_nearest_townhall(human, game_state.townhall_list)
+    def _return_to_building(self, human, game_state):
+        """Human returns to building to deposit resource"""
+        # Use the building we stored when assignment was made
+        building = human.target_building
         
-        if not townhall:
-            # No town hall available - shouldn't happen as we check before starting
+        if not building:
+            # No building available - shouldn't happen
             human.state = "stay"
             human.harvest_target = None
             human.carrying_log = False
+            human.target_building = None
             return
         
-        # Move to town hall
+        # Move to building
         dist = distance(
             human.x + human.size/2,
             human.y + human.size/2,
-            townhall.x + townhall.width/2,
-            townhall.y + townhall.height/2
+            building.x + building.width/2,
+            building.y + building.height/2
         )
         
-        if dist > 20:  # Not at town hall yet
-            dx = (townhall.x + townhall.width/2) - (human.x + human.size/2)
-            dy = (townhall.y + townhall.height/2) - (human.y + human.size/2)
+        if dist > 20:  # Not at building yet
+            dx = (building.x + building.width/2) - (human.x + human.size/2)
+            dy = (building.y + building.height/2) - (human.y + human.size/2)
             dx = (dx / dist) * human.speed
             dy = (dy / dist) * human.speed
             
@@ -146,20 +148,21 @@ class HarvestSystem:
             if self._check_collisions(human, game_state):
                 human.x, human.y = old_x, old_y
         else:
-            # At town hall, deposit log
-            from systems.resource_system import ResourceType
-            self.resource_system.add_resource(ResourceType.LOG, 1)
+            # At building, deposit resource
+            building.add_log()
             
             human.carrying_log = False
             human.harvest_timer = 0.0
-            # Continue harvesting if tree still has health
+            
+            # Continue harvesting if resource still has health
             if human.harvest_target and not human.harvest_target.is_depleted():
-                # Go back to tree
+                # Go back to resource
                 pass
             else:
-                # Tree depleted, stop harvesting
+                # Resource depleted, stop harvesting
                 human.state = "stay"
                 human.harvest_target = None
+                human.target_building = None
     
     def _check_collisions(self, human, game_state):
         """Simple collision check for harvesting humans"""
@@ -169,34 +172,22 @@ class HarvestSystem:
         for townhall in game_state.townhall_list:
             if townhall.check_collision_player(human.x, human.y):
                 return True
+        for lumber_yard in game_state.lumber_yard_list:
+            if lumber_yard.check_collision_player(human.x, human.y):
+                return True
         return False
-    
-    def _find_nearest_townhall(self, human, townhall_list):
-        """Find the nearest town hall"""
-        if not townhall_list:
-            return None
-        
-        nearest = None
-        min_dist = float('inf')
-        
-        for townhall in townhall_list:
-            dist = distance(
-                human.x + human.size/2,
-                human.y + human.size/2,
-                townhall.x + townhall.width/2,
-                townhall.y + townhall.height/2
-            )
-            if dist < min_dist:
-                min_dist = dist
-                nearest = townhall
-        
-        return nearest
     
     def assign_harvest_target(self, human, tree, game_state):
         """Assign a tree as harvest target for a human"""
-        # Check if town hall exists
-        if not game_state.townhall_list:
-            self.show_error("No town hall available")
+        # Check if any lumber yard has space
+        available_lumber_yard = None
+        for lumber_yard in game_state.lumber_yard_list:
+            if lumber_yard.can_accept_resource():
+                available_lumber_yard = lumber_yard
+                break
+        
+        if not available_lumber_yard:
+            self.show_error("No lumber yard with space")
             return False
         
         # Check if human is male
@@ -206,6 +197,7 @@ class HarvestSystem:
         # Assign target
         human.state = "harvest"
         human.harvest_target = tree
+        human.target_building = available_lumber_yard  # Store which building to deliver to
         human.harvest_timer = 0.0
         human.carrying_log = False
         
@@ -266,19 +258,19 @@ class HarvestSystem:
         if human.state != "harvest" or not human.harvest_target:
             return
         
-        tree = human.harvest_target
+        resource = human.harvest_target
         
-        # Only draw tool if at tree and not carrying log
+        # Only draw tool if at resource and not carrying
         if not human.carrying_log:
             dist = distance(
                 human.x + human.size/2,
                 human.y + human.size/2,
-                tree.x,
-                tree.y
+                resource.x,
+                resource.y
             )
             
-            if dist <= 25:  # At tree
-                # Draw small tool hitting tree
-                tool_x = int(human.x + human.size/2 + (tree.x - human.x) * 0.5)
-                tool_y = int(human.y + human.size/2 + (tree.y - human.y) * 0.5)
+            if dist <= 25:  # At resource
+                # Draw small tool hitting resource
+                tool_x = int(human.x + human.size/2 + (resource.x - human.x) * 0.5)
+                tool_y = int(human.y + human.size/2 + (resource.y - human.y) * 0.5)
                 pygame.draw.circle(screen, GRAY, (tool_x, tool_y), HARVEST_TOOL_SIZE // 2)

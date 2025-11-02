@@ -40,15 +40,32 @@ class Game:
     
     def _initialize_world(self):
         """Initialize game world with entities"""
-        # Generate entities
-        sheep_list, human_list, pen_list = WorldGenerator.generate_initial_entities()
+        # Generate entities and buildings
+        sheep_list, human_list, pen_list, lumber_yard_list, stone_yard_list, iron_yard_list = WorldGenerator.generate_initial_entities()
         
         self.game_state.sheep_list = sheep_list
         self.game_state.human_list = human_list
         self.game_state.pen_list = pen_list
+        self.game_state.lumber_yard_list = lumber_yard_list
+        self.game_state.stone_yard_list = stone_yard_list
+        self.game_state.iron_yard_list = iron_yard_list
         
         # Generate trees
         self.game_state.tree_list = WorldGenerator.generate_trees(pen_list=pen_list)
+        
+        # Generate rocks
+        self.game_state.rock_list = WorldGenerator.generate_rocks(num_rocks=15, pen_list=pen_list, tree_list=self.game_state.tree_list)
+        
+        # Generate iron mine
+        iron_mine = WorldGenerator.generate_iron_mine(
+            pen_list=pen_list, 
+            tree_list=self.game_state.tree_list,
+            rock_list=self.game_state.rock_list
+        )
+        if iron_mine:
+            self.game_state.iron_mine_list = [iron_mine]
+        else:
+            self.game_state.iron_mine_list = []
     
     def run(self):
         """Main game loop"""
@@ -188,12 +205,22 @@ class Game:
             pygame.draw.circle(self.screen, DARK_GREEN, (pixel_x, pixel_y), 2)
     
     def _draw_structures(self):
-        """Draw trees, pens, and town halls"""
+        """Draw all harvestable resources and buildings"""
         # Draw trees (show health if in harvest cursor mode)
         show_health = self.harvest_system.harvest_cursor_active
         for tree in self.game_state.tree_list:
             if not tree.is_depleted():
                 tree.draw(self.screen, show_health=show_health)
+        
+        # Draw rocks
+        for rock in self.game_state.rock_list:
+            if not rock.is_depleted():
+                rock.draw(self.screen, show_health=show_health)
+        
+        # Draw iron mines
+        for iron_mine in self.game_state.iron_mine_list:
+            if not iron_mine.is_depleted():
+                iron_mine.draw(self.screen, show_health=show_health)
         
         # Draw pens
         for pen in self.game_state.pen_list:
@@ -202,6 +229,18 @@ class Game:
         # Draw town halls
         for townhall in self.game_state.townhall_list:
             townhall.draw(self.screen, preview=False, resource_system=self.resource_system)
+        
+        # Draw lumber yards
+        for lumber_yard in self.game_state.lumber_yard_list:
+            lumber_yard.draw(self.screen, preview=False)
+        
+        # Draw stone yards
+        for stone_yard in self.game_state.stone_yard_list:
+            stone_yard.draw(self.screen, preview=False)
+        
+        # Draw iron yards
+        for iron_yard in self.game_state.iron_yard_list:
+            iron_yard.draw(self.screen, preview=False)
     
     def _draw_entities(self):
         """Draw sheep and humans"""
@@ -256,3 +295,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

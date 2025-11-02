@@ -17,7 +17,12 @@ class GameState:
         self.human_list = []
         self.pen_list = []
         self.townhall_list = []
+        self.lumber_yard_list = []
+        self.stone_yard_list = []
+        self.iron_yard_list = []
         self.tree_list = []
+        self.rock_list = []
+        self.iron_mine_list = []
         self.eaten_pixels = set()
         
         # Time tracking
@@ -27,7 +32,7 @@ class GameState:
         # UI state
         self.debug_mode = False
         self.build_mode = False
-        self.build_mode_type = None  # "pen" or "townhall"
+        self.build_mode_type = None  # "pen", "townhall", "lumberyard", "stoneyard", "ironyard"
         self.pen_rotation = 0  # 0 = top, 1 = right, 2 = bottom, 3 = left
         
         # Selection state
