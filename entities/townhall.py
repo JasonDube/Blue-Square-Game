@@ -28,6 +28,9 @@ class TownHall:
             'miner': {'max': 5, 'filled': 0},  # Can have up to 5 miners
             'stoneworker': {'max': 5, 'filled': 0},  # Can have up to 5 stoneworkers
             'saltworker': {'max': 5, 'filled': 0},  # Can have up to 5 saltworkers
+            'shearer': {'max': 5, 'filled': 0},  # Can have up to 5 shearers (female only)
+            'barleyfarmer': {'max': 5, 'filled': 0},  # Can have up to 5 barley farmers
+            'miller': {'max': 5, 'filled': 0},  # Can have up to 5 millers
             # Future: 'farmer': {'max': 3, 'filled': 0}, etc.
         }
     
@@ -101,14 +104,74 @@ class TownHall:
             self.job_slots[human.job]['filled'] -= 1
         human.job = None
         human.employer = None
-        human.is_employed = False  # FIXED: Clear employment flag
-        human.state = "stay"
+        human.is_employed = False  # Clear employment flag
+        human.state = "wander"  # Set to wander (unemployed) state
+        # Release hut if they had one
+        if human.home_hut:
+            human.home_hut.release()
+            human.home_hut = None
         return True
     
     def contains_point(self, px, py):
         """Check if a point is inside the town hall"""
         return (self.x <= px <= self.x + self.width and 
                 self.y <= py <= self.y + self.height)
+    
+    def get_bench_rect(self):
+        """Get the rectangle for the bench on the front side of the town hall"""
+        bench_thickness = 12
+        if self.rotation == 0:  # Front wall is top
+            bench_x = self.x
+            bench_y = self.y - bench_thickness
+            bench_width = self.width
+            bench_height = bench_thickness
+        elif self.rotation == 1:  # Front wall is right
+            bench_x = self.x + self.width
+            bench_y = self.y
+            bench_width = bench_thickness
+            bench_height = self.height
+        elif self.rotation == 2:  # Front wall is bottom
+            bench_x = self.x
+            bench_y = self.y + self.height
+            bench_width = self.width
+            bench_height = bench_thickness
+        else:  # Front wall is left (rotation == 3)
+            bench_x = self.x - bench_thickness
+            bench_y = self.y
+            bench_width = bench_thickness
+            bench_height = self.height
+        return pygame.Rect(bench_x, bench_y, bench_width, bench_height)
+    
+    def get_bench_sitting_positions(self, human_size):
+        """Get list of positions where humans can sit on the bench (with 2px spacing)"""
+        bench_rect = self.get_bench_rect()
+        spacing = 2
+        positions = []
+        
+        if self.rotation == 0 or self.rotation == 2:  # Horizontal bench
+            # Calculate how many humans can fit
+            total_space = bench_rect.width
+            space_per_human = human_size + spacing
+            num_humans = int(total_space / space_per_human)
+            start_x = bench_rect.x + (total_space - (num_humans * space_per_human - spacing)) / 2
+            
+            for i in range(num_humans):
+                x = start_x + i * space_per_human
+                y = bench_rect.y + (bench_rect.height - human_size) / 2
+                positions.append((x, y))
+        else:  # Vertical bench (rotation == 1 or 3)
+            # Calculate how many humans can fit
+            total_space = bench_rect.height
+            space_per_human = human_size + spacing
+            num_humans = int(total_space / space_per_human)
+            start_y = bench_rect.y + (total_space - (num_humans * space_per_human - spacing)) / 2
+            
+            for i in range(num_humans):
+                x = bench_rect.x + (bench_rect.width - human_size) / 2
+                y = start_y + i * space_per_human
+                positions.append((x, y))
+        
+        return positions
     
     def draw(self, screen, preview=False, resource_system=None):
         """Draw the town hall"""
@@ -118,6 +181,12 @@ class TownHall:
         pygame.draw.rect(screen, color, (self.x, self.y, self.width, self.height))
         # Draw border
         pygame.draw.rect(screen, BLACK, (self.x, self.y, self.width, self.height), 2)
+        
+        # Draw brown bench on front side (only if not preview)
+        if not preview:
+            bench_rect = self.get_bench_rect()
+            pygame.draw.rect(screen, BROWN, bench_rect)
+            pygame.draw.rect(screen, BLACK, bench_rect, 1)
         
         # Draw stored resources if not preview and resource system exists
         # Town halls only store wool and meat (logs/stones/iron have dedicated buildings)

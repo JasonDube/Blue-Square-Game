@@ -10,6 +10,10 @@ from entities.stoneyard import StoneYard
 from entities.ironyard import IronYard
 from entities.saltyard import SaltYard
 from entities.hut import Hut
+from entities.woolshed import WoolShed
+from entities.barleyfarm import BarleyFarm
+from entities.silo import Silo
+from entities.mill import Mill
 
 
 class BuildModeRenderer:
@@ -43,6 +47,14 @@ class BuildModeRenderer:
             self._draw_saltyard_preview(screen, mouse_x, mouse_y, game_state.pen_rotation, is_valid)
         elif game_state.build_mode_type == "hut":
             self._draw_hut_preview(screen, mouse_x, mouse_y, is_valid)
+        elif game_state.build_mode_type == "woolshed":
+            self._draw_woolshed_preview(screen, mouse_x, mouse_y, game_state.pen_rotation, is_valid)
+        elif game_state.build_mode_type == "barleyfarm":
+            self._draw_barleyfarm_preview(screen, mouse_x, mouse_y, game_state.pen_rotation, is_valid)
+        elif game_state.build_mode_type == "silo":
+            self._draw_silo_preview(screen, mouse_x, mouse_y, is_valid)
+        elif game_state.build_mode_type == "mill":
+            self._draw_mill_preview(screen, mouse_x, mouse_y, game_state.pen_rotation, is_valid)
         
         # Draw instructions
         self._draw_instructions(screen, game_state.build_mode_type, game_state.pen_rotation, is_valid)
@@ -112,6 +124,41 @@ class BuildModeRenderer:
             height = HUT_SIZE
             preview_x = mouse_x - HUT_SIZE // 2
             preview_y = mouse_y - HUT_SIZE // 2
+        elif build_type == "woolshed":
+            rotation = game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                width = WOOLSHED_HEIGHT
+                height = WOOLSHED_WIDTH
+            else:
+                width = WOOLSHED_WIDTH
+                height = WOOLSHED_HEIGHT
+            preview_x = mouse_x - width // 2
+            preview_y = mouse_y - height // 2
+        elif build_type == "barleyfarm":
+            rotation = game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                width = BARLEYFARM_HEIGHT
+                height = BARLEYFARM_WIDTH
+            else:
+                width = BARLEYFARM_WIDTH
+                height = BARLEYFARM_HEIGHT
+            preview_x = mouse_x - width // 2
+            preview_y = mouse_y - height // 2
+        elif build_type == "mill":
+            rotation = game_state.pen_rotation
+            if rotation == 0 or rotation == 2:
+                width = MILL_WIDTH + 100  # Include outbuildings (50 on each side)
+                height = MILL_HEIGHT
+            else:
+                width = MILL_WIDTH
+                height = MILL_HEIGHT + 100  # Include outbuildings (50 on top/bottom)
+            preview_x = mouse_x - width // 2
+            preview_y = mouse_y - height // 2
+        elif build_type == "silo":
+            width = SILO_RADIUS * 2
+            height = SILO_RADIUS * 2
+            preview_x = mouse_x - SILO_RADIUS
+            preview_y = mouse_y - SILO_RADIUS
         else:
             return True
         
@@ -183,6 +230,38 @@ class BuildModeRenderer:
         for hut in game_state.hut_list:
             hut_rect = pygame.Rect(hut.x, hut.y, hut.size, hut.size)
             if building_rect.colliderect(hut_rect):
+                return False
+        
+        # Check collision with wool sheds
+        for wool_shed in game_state.wool_shed_list:
+            wool_rect = pygame.Rect(wool_shed.x, wool_shed.y, wool_shed.width, wool_shed.height)
+            if building_rect.colliderect(wool_rect):
+                return False
+        
+        # Check collision with barley farms
+        for barley_farm in game_state.barley_farm_list:
+            farm_rect = pygame.Rect(barley_farm.x, barley_farm.y, barley_farm.width, barley_farm.height)
+            if building_rect.colliderect(farm_rect):
+                return False
+        
+        # Check collision with silos (circular, but check bounding box)
+        for silo in game_state.silo_list:
+            silo_rect = pygame.Rect(silo.x, silo.y, silo.radius * 2, silo.radius * 2)
+            if building_rect.colliderect(silo_rect):
+                return False
+        
+        # Check collision with mills (including outbuildings)
+        for mill in game_state.mill_list:
+            mill_rect = pygame.Rect(mill.x, mill.y, mill.width, mill.height)
+            if building_rect.colliderect(mill_rect):
+                return False
+            # Check outbuildings
+            outbuilding_size = 50
+            flour_rect = pygame.Rect(mill.flour_outbuilding_x, mill.flour_outbuilding_y, 
+                                     outbuilding_size, outbuilding_size)
+            malt_rect = pygame.Rect(mill.malt_outbuilding_x, mill.malt_outbuilding_y, 
+                                   outbuilding_size, outbuilding_size)
+            if building_rect.colliderect(flour_rect) or building_rect.colliderect(malt_rect):
                 return False
         
         return True
@@ -350,6 +429,120 @@ class BuildModeRenderer:
         pygame.draw.rect(screen, color, (preview_x, preview_y, draw_width, draw_height))
         pygame.draw.rect(screen, BLACK, (preview_x, preview_y, draw_width, draw_height), 2)
     
+    def _draw_woolshed_preview(self, screen, mouse_x, mouse_y, rotation, is_valid):
+        """Draw preview of wool shed placement"""
+        # For rotations 1 and 3 (90 and 270 degrees), swap width and height
+        if rotation == 1 or rotation == 3:
+            draw_width = WOOLSHED_HEIGHT
+            draw_height = WOOLSHED_WIDTH
+        else:
+            draw_width = WOOLSHED_WIDTH
+            draw_height = WOOLSHED_HEIGHT
+        
+        preview_x = mouse_x - draw_width // 2
+        preview_y = mouse_y - draw_height // 2
+        
+        # Keep within playable area bounds
+        preview_x = max(0, min(preview_x, SCREEN_WIDTH - draw_width))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - draw_height))
+        
+        # Choose color based on validity
+        DARK_GREY = (64, 64, 64)
+        color = DARK_GREY if is_valid else RED
+        
+        # Draw filled rectangle with rotated dimensions
+        pygame.draw.rect(screen, color, (preview_x, preview_y, draw_width, draw_height))
+        pygame.draw.rect(screen, BLACK, (preview_x, preview_y, draw_width, draw_height), 2)
+    
+    def _draw_barleyfarm_preview(self, screen, mouse_x, mouse_y, rotation, is_valid):
+        """Draw preview of barley farm placement"""
+        # For rotations 1 and 3 (90 and 270 degrees), swap width and height
+        if rotation == 1 or rotation == 3:
+            draw_width = BARLEYFARM_HEIGHT
+            draw_height = BARLEYFARM_WIDTH
+        else:
+            draw_width = BARLEYFARM_WIDTH
+            draw_height = BARLEYFARM_HEIGHT
+        
+        preview_x = mouse_x - draw_width // 2
+        preview_y = mouse_y - draw_height // 2
+        
+        # Keep within playable area bounds
+        preview_x = max(0, min(preview_x, SCREEN_WIDTH - draw_width))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - draw_height))
+        
+        # Choose color based on validity (unfilled rectangle)
+        color = GRAY if is_valid else RED
+        
+        # Draw unfilled rectangle with rotated dimensions
+        pygame.draw.rect(screen, color, (preview_x, preview_y, draw_width, draw_height), 1)
+    
+    def _draw_silo_preview(self, screen, mouse_x, mouse_y, is_valid):
+        """Draw preview of silo placement"""
+        from constants import SILO_RADIUS
+        preview_color = GRAY if is_valid else RED
+        
+        # Clamp position to playable area
+        preview_x = mouse_x - SILO_RADIUS
+        preview_y = mouse_y - SILO_RADIUS
+        preview_x = max(0, min(preview_x, SCREEN_WIDTH - SILO_RADIUS * 2))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - SILO_RADIUS * 2))
+        
+        # Draw circle preview
+        center_x = int(preview_x + SILO_RADIUS)
+        center_y = int(preview_y + SILO_RADIUS)
+        
+        # Draw filled circle
+        pygame.draw.circle(screen, preview_color, (center_x, center_y), SILO_RADIUS)
+        pygame.draw.circle(screen, BLACK, (center_x, center_y), SILO_RADIUS, 2)
+    
+    def _draw_mill_preview(self, screen, mouse_x, mouse_y, rotation, is_valid):
+        """Draw preview of mill placement with outbuildings (supports rotation)"""
+        from constants import MILL_WIDTH, MILL_HEIGHT, WOOD_BROWN
+        color = GRAY if is_valid else RED
+        wood_color = WOOD_BROWN if is_valid else RED
+        preview_x = mouse_x - MILL_WIDTH / 2
+        preview_y = mouse_y - MILL_HEIGHT / 2
+        
+        # Clamp position to playable area
+        preview_x = max(0, min(preview_x, SCREEN_WIDTH - MILL_WIDTH))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - MILL_HEIGHT))
+        
+        outbuilding_size = 50
+        
+        # Calculate outbuilding positions based on rotation
+        if rotation == 0 or rotation == 2:
+            # Horizontal: flour left, malt right (or reversed for rotation 2)
+            if rotation == 0:
+                flour_x = preview_x - outbuilding_size
+                malt_x = preview_x + MILL_WIDTH
+            else:
+                flour_x = preview_x + MILL_WIDTH
+                malt_x = preview_x - outbuilding_size
+            flour_y = preview_y + (MILL_HEIGHT - outbuilding_size) / 2
+            malt_y = preview_y + (MILL_HEIGHT - outbuilding_size) / 2
+        else:  # rotation == 1 or 3
+            # Vertical: flour top, malt bottom (or reversed for rotation 3)
+            if rotation == 1:
+                flour_y = preview_y - outbuilding_size
+                malt_y = preview_y + MILL_HEIGHT
+            else:
+                flour_y = preview_y + MILL_HEIGHT
+                malt_y = preview_y - outbuilding_size
+            flour_x = preview_x + (MILL_WIDTH - outbuilding_size) / 2
+            malt_x = preview_x + (MILL_WIDTH - outbuilding_size) / 2
+        
+        # Draw outbuildings preview
+        pygame.draw.rect(screen, wood_color, (flour_x, flour_y, outbuilding_size, outbuilding_size))
+        pygame.draw.rect(screen, BLACK, (flour_x, flour_y, outbuilding_size, outbuilding_size), 2)
+        
+        pygame.draw.rect(screen, wood_color, (malt_x, malt_y, outbuilding_size, outbuilding_size))
+        pygame.draw.rect(screen, BLACK, (malt_x, malt_y, outbuilding_size, outbuilding_size), 2)
+        
+        # Draw main mill building
+        pygame.draw.rect(screen, color, (preview_x, preview_y, MILL_WIDTH, MILL_HEIGHT))
+        pygame.draw.rect(screen, BLACK, (preview_x, preview_y, MILL_WIDTH, MILL_HEIGHT), 2)
+    
     def _draw_instructions(self, screen, build_type, rotation, is_valid):
         """Draw build mode instructions at bottom of screen"""
         rotation_names = ["Top", "Right", "Bottom", "Left"]
@@ -360,6 +553,10 @@ class BuildModeRenderer:
             "stoneyard": "Stone Yard",
             "ironyard": "Iron Yard",
             "saltyard": "Salt Yard",
+            "woolshed": "Wool Shed",
+            "barleyfarm": "Barley Farm",
+            "silo": "Silo",
+            "mill": "Mill",
             "hut": "Hut"
         }
         build_type_name = build_type_names.get(build_type, "Structure")
@@ -368,7 +565,11 @@ class BuildModeRenderer:
         status = "Valid" if is_valid else "INVALID - Clear space required!"
         status_color = GREEN if is_valid else RED
         
-        text = f"Build Mode: {build_type_name} (Rotation: {rotation_names[rotation]}) - {status}"
+        # Mill supports rotation but doesn't change shape
+        if build_type == "mill":
+            text = f"Build Mode: {build_type_name} (Rotation: {rotation_names[rotation]}) - {status}"
+        else:
+            text = f"Build Mode: {build_type_name} (Rotation: {rotation_names[rotation]}) - {status}"
         text_surface = self.font.render(text, True, status_color)
         # Position above bottom HUD
         screen.blit(text_surface, (10, PLAYABLE_AREA_BOTTOM - 45))

@@ -162,6 +162,32 @@ class InputSystem:
             if building_rect.colliderect(pygame.Rect(hut.x, hut.y, hut.size, hut.size)):
                 return False
         
+        for wool_shed in self.game_state.wool_shed_list:
+            if building_rect.colliderect(pygame.Rect(wool_shed.x, wool_shed.y, wool_shed.width, wool_shed.height)):
+                return False
+        
+        for barley_farm in self.game_state.barley_farm_list:
+            if building_rect.colliderect(pygame.Rect(barley_farm.x, barley_farm.y, barley_farm.width, barley_farm.height)):
+                return False
+        
+        for silo in self.game_state.silo_list:
+            silo_rect = pygame.Rect(silo.x, silo.y, silo.radius * 2, silo.radius * 2)
+            if building_rect.colliderect(silo_rect):
+                return False
+        
+        for mill in self.game_state.mill_list:
+            # Check collision with main mill building
+            if building_rect.colliderect(pygame.Rect(mill.x, mill.y, mill.width, mill.height)):
+                return False
+            # Check collision with outbuildings
+            outbuilding_size = 50
+            flour_rect = pygame.Rect(mill.flour_outbuilding_x, mill.flour_outbuilding_y, 
+                                     outbuilding_size, outbuilding_size)
+            malt_rect = pygame.Rect(mill.malt_outbuilding_x, mill.malt_outbuilding_y, 
+                                   outbuilding_size, outbuilding_size)
+            if building_rect.colliderect(flour_rect) or building_rect.colliderect(malt_rect):
+                return False
+        
         return True
     
     def _handle_harvest_target_selection(self, mouse_x, mouse_y):
@@ -209,7 +235,21 @@ class InputSystem:
         if self.game_state.show_male_human_context_menu:
             option = self._check_male_human_context_menu_click(mouse_x, mouse_y, self.game_state)
             if option:
-                if option == "harvest":
+                if option == "fire":
+                    # Fire selected male humans (only if they are employed)
+                    for human in self.game_state.human_list:
+                        if human.selected and human.gender == "male" and human.is_employed:
+                            if human.employer:
+                                human.employer.fire_human(human)
+                                # Reset human to unemployed state
+                                human.state = "wander"
+                                human.wander_timer = 0.0
+                                human.wander_target_x = None
+                                human.wander_target_y = None
+                                human.is_wandering = False
+                    clicked_menu = True
+                    self.game_state.show_male_human_context_menu = False
+                elif option == "harvest":
                     # Activate harvest cursor mode
                     if self.harvest_system:
                         self.harvest_system.activate_harvest_cursor()
@@ -252,6 +292,13 @@ class InputSystem:
                                             human.target_building = salt_yard
                                             human.resource_type = ResourceType.SALT
                                             break
+                                elif human.job == "barleyfarmer":
+                                    # Find appropriate silo
+                                    for silo in self.game_state.silo_list:
+                                        if silo.can_accept_resource():
+                                            human.target_building = silo
+                                            human.resource_type = ResourceType.BARLEY
+                                            break
                                 
                                 # Restore harvest_target from work_target if work_target exists
                                 if human.work_target and not human.harvest_target:
@@ -279,6 +326,8 @@ class InputSystem:
                                         expected_type = ResourceType.STONE
                                     elif human.job == "saltworker":
                                         expected_type = ResourceType.SALT
+                                    elif human.job == "barleyfarmer":
+                                        expected_type = ResourceType.BARLEY
                                     
                                     if expected_type and human.resource_type != expected_type:
                                         human.carrying_resource = False
@@ -309,18 +358,61 @@ class InputSystem:
         if self.game_state.show_female_human_context_menu:
             option = self._check_female_human_context_menu_click(mouse_x, mouse_y, self.game_state)
             if option:
-                if option == "auto":
+                if option == "fire":
+                    # Fire selected female humans (only if they are employed)
+                    for human in self.game_state.human_list:
+                        if human.selected and human.gender == "female" and human.is_employed:
+                            if human.employer:
+                                human.employer.fire_human(human)
+                                # Reset human to unemployed state
+                                human.state = "wander"
+                                human.wander_timer = 0.0
+                                human.wander_target_x = None
+                                human.wander_target_y = None
+                                human.is_wandering = False
+                    clicked_menu = True
+                    self.game_state.show_female_human_context_menu = False
+                elif option == "auto":
                     # Set to automated behavior (work if employed, wander if not)
                     for human in self.game_state.human_list:
                         if human.selected and human.gender == "female":
                             if human.is_employed:
                                 human.state = "employed"
+                                
+                                # Reset target building and resource type to match job
+                                from systems.resource_system import ResourceType
+                                if human.job == "shearer":
+                                    # Find appropriate wool shed
+                                    for wool_shed in self.game_state.wool_shed_list:
+                                        if wool_shed.can_accept_resource():
+                                            human.target_building = wool_shed
+                                            human.resource_type = ResourceType.WOOL
+                                            break
+                                
                                 # Restore harvest_target from work_target if work_target exists
                                 if human.work_target and not human.harvest_target:
                                     human.harvest_target = human.work_target
                                     # Reset harvest position so it gets recalculated
                                     human.harvest_position = None
                                     human.harvest_timer = 0.0
+                                # Clear any manual harvest assignments (not work assignments)
+                                # Only clear if there's a conflict (harvest_target different from work_target)
+                                if (human.harvest_target and human.work_target and 
+                                    human.harvest_target != human.work_target):
+                                    human.harvest_target = None
+                                    human.harvest_position = None
+                                    human.harvest_timer = 0.0
+                                
+                                # Clear any wrong resource types if carrying something
+                                if human.carrying_resource:
+                                    # If they're carrying the wrong resource type, drop it
+                                    expected_type = None
+                                    if human.job == "shearer":
+                                        expected_type = ResourceType.WOOL
+                                    
+                                    if expected_type and human.resource_type != expected_type:
+                                        human.carrying_resource = False
+                                        human.resource_type = expected_type
                             else:
                                 # Unemployed - set to wander
                                 human.state = "wander"
@@ -362,6 +454,18 @@ class InputSystem:
             elif option == "build_saltyard":
                 self.game_state.build_mode = True
                 self.game_state.build_mode_type = "saltyard"
+            elif option == "build_woolshed":
+                self.game_state.build_mode = True
+                self.game_state.build_mode_type = "woolshed"
+            elif option == "build_barleyfarm":
+                self.game_state.build_mode = True
+                self.game_state.build_mode_type = "barleyfarm"
+            elif option == "build_silo":
+                self.game_state.build_mode = True
+                self.game_state.build_mode_type = "silo"
+            elif option == "build_mill":
+                self.game_state.build_mode = True
+                self.game_state.build_mode_type = "mill"
             elif option == "build_hut":
                 self.game_state.build_mode = True
                 self.game_state.build_mode_type = "hut"
@@ -485,6 +589,102 @@ class InputSystem:
                 self.game_state.build_mode_type = None
                 self.game_state.pen_rotation = 0
             
+        elif self.game_state.build_mode_type == "woolshed":
+            from entities.woolshed import WoolShed
+            rotation = self.game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                draw_width = WOOLSHED_HEIGHT
+                draw_height = WOOLSHED_WIDTH
+            else:
+                draw_width = WOOLSHED_WIDTH
+                draw_height = WOOLSHED_HEIGHT
+            
+            woolshed_x = mouse_x - draw_width // 2
+            woolshed_y = mouse_y - draw_height // 2
+            woolshed_x = max(0, min(woolshed_x, SCREEN_WIDTH - draw_width))
+            woolshed_y = max(PLAYABLE_AREA_TOP, min(woolshed_y, PLAYABLE_AREA_BOTTOM - draw_height))
+            
+            if self._check_placement_valid(woolshed_x, woolshed_y, draw_width, draw_height):
+                self.game_state.wool_shed_list.append(WoolShed(woolshed_x, woolshed_y, self.game_state.pen_rotation))
+                self.game_state.build_mode = False
+                self.game_state.build_mode_type = None
+                self.game_state.pen_rotation = 0
+            
+        elif self.game_state.build_mode_type == "barleyfarm":
+            from entities.barleyfarm import BarleyFarm
+            rotation = self.game_state.pen_rotation
+            if rotation == 1 or rotation == 3:
+                draw_width = BARLEYFARM_HEIGHT
+                draw_height = BARLEYFARM_WIDTH
+            else:
+                draw_width = BARLEYFARM_WIDTH
+                draw_height = BARLEYFARM_HEIGHT
+            
+            barleyfarm_x = mouse_x - draw_width // 2
+            barleyfarm_y = mouse_y - draw_height // 2
+            barleyfarm_x = max(0, min(barleyfarm_x, SCREEN_WIDTH - draw_width))
+            barleyfarm_y = max(PLAYABLE_AREA_TOP, min(barleyfarm_y, PLAYABLE_AREA_BOTTOM - draw_height))
+            
+            if self._check_placement_valid(barleyfarm_x, barleyfarm_y, draw_width, draw_height):
+                self.game_state.barley_farm_list.append(BarleyFarm(barleyfarm_x, barleyfarm_y, self.game_state.pen_rotation))
+                self.game_state.build_mode = False
+                self.game_state.build_mode_type = None
+                self.game_state.pen_rotation = 0
+            
+        elif self.game_state.build_mode_type == "silo":
+            from entities.silo import Silo
+            silo_x = mouse_x - SILO_RADIUS
+            silo_y = mouse_y - SILO_RADIUS
+            silo_x = max(0, min(silo_x, SCREEN_WIDTH - SILO_RADIUS * 2))
+            silo_y = max(PLAYABLE_AREA_TOP, min(silo_y, PLAYABLE_AREA_BOTTOM - SILO_RADIUS * 2))
+            
+            if self._check_placement_valid(silo_x, silo_y, SILO_RADIUS * 2, SILO_RADIUS * 2):
+                self.game_state.silo_list.append(Silo(silo_x, silo_y))
+                self.game_state.build_mode = False
+                self.game_state.build_mode_type = None
+            
+        elif self.game_state.build_mode_type == "mill":
+            from entities.mill import Mill
+            from constants import MILL_WIDTH, MILL_HEIGHT
+            outbuilding_size = 50
+            rotation = self.game_state.pen_rotation
+            
+            # Calculate mill position based on rotation
+            mill_x = mouse_x - MILL_WIDTH / 2
+            mill_y = mouse_y - MILL_HEIGHT / 2
+            
+            # Adjust for outbuildings based on rotation
+            if rotation == 0:  # Horizontal: outbuildings left/right
+                mill_x = max(outbuilding_size, min(mill_x, SCREEN_WIDTH - MILL_WIDTH - outbuilding_size))
+            elif rotation == 2:  # Horizontal reversed
+                mill_x = max(outbuilding_size, min(mill_x, SCREEN_WIDTH - MILL_WIDTH - outbuilding_size))
+            elif rotation == 1:  # Vertical: outbuildings top/bottom
+                mill_y = max(PLAYABLE_AREA_TOP + outbuilding_size, min(mill_y, PLAYABLE_AREA_BOTTOM - MILL_HEIGHT - outbuilding_size))
+            else:  # rotation == 3
+                mill_y = max(PLAYABLE_AREA_TOP + outbuilding_size, min(mill_y, PLAYABLE_AREA_BOTTOM - MILL_HEIGHT - outbuilding_size))
+            
+            mill_x = max(0, min(mill_x, SCREEN_WIDTH - MILL_WIDTH))
+            mill_y = max(PLAYABLE_AREA_TOP, min(mill_y, PLAYABLE_AREA_BOTTOM - MILL_HEIGHT))
+            
+            # Check placement including outbuildings
+            # Calculate bounding box including outbuildings
+            if rotation == 0 or rotation == 2:
+                check_x = mill_x - outbuilding_size
+                check_width = MILL_WIDTH + outbuilding_size * 2
+                check_y = mill_y
+                check_height = MILL_HEIGHT
+            else:
+                check_x = mill_x
+                check_width = MILL_WIDTH
+                check_y = mill_y - outbuilding_size
+                check_height = MILL_HEIGHT + outbuilding_size * 2
+            
+            if self._check_placement_valid(check_x, check_y, check_width, check_height):
+                self.game_state.mill_list.append(Mill(mill_x, mill_y, rotation))
+                self.game_state.build_mode = False
+                self.game_state.build_mode_type = None
+                self.game_state.pen_rotation = 0  # Reset rotation
+            
         elif self.game_state.build_mode_type == "hut":
             from entities.hut import Hut
             hut_x = mouse_x - HUT_SIZE // 2
@@ -499,34 +699,40 @@ class InputSystem:
     
     def _handle_right_click(self, mouse_x, mouse_y):
         """Handle right click - show context menus"""
-        # First check if clicking on a town hall (but not if in build mode)
-        if not self.game_state.build_mode:
-            clicked_townhall = None
-            for townhall in self.game_state.townhall_list:
-                if townhall.contains_point(mouse_x, mouse_y):
-                    clicked_townhall = townhall
-                    break
-            
-            if clicked_townhall and self.employment_menu:
-                # Show employment menu for this town hall
-                self.employment_menu.show(clicked_townhall, mouse_x, mouse_y)
-                # Hide all other context menus
-                self.game_state.show_context_menu = False
-                self.game_state.show_male_human_context_menu = False
-                self.game_state.show_female_human_context_menu = False
-                self.game_state.show_player_context_menu = False
-                return
-        
+        # Check for selected entities first - player menu takes priority over town hall menu
         any_sheep_selected = self.game_state.any_sheep_selected()
         any_male_human_selected = self.game_state.any_male_human_selected()
         any_female_human_selected = self.game_state.any_female_human_selected()
         
-        if any_sheep_selected or any_male_human_selected or any_female_human_selected:
+        # Check if clicking on a town hall
+        clicked_townhall = None
+        if not self.game_state.build_mode:
+            for townhall in self.game_state.townhall_list:
+                if townhall.contains_point(mouse_x, mouse_y):
+                    clicked_townhall = townhall
+                    break
+        
+        # If entities are selected AND clicking on a town hall, show player menu instead of employment menu
+        if (any_sheep_selected or any_male_human_selected or any_female_human_selected) and clicked_townhall:
+            # Show player context menu - clamp to playable area
+            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - 284))
+            self.game_state.show_context_menu = False
+            self.game_state.show_male_human_context_menu = False
+            self.game_state.show_female_human_context_menu = False
+            self.game_state.show_player_context_menu = True
+            self.game_state.player_context_menu_x = mouse_x
+            self.game_state.player_context_menu_y = menu_y
+            
+            # Hide employment menu when entities are selected (player menu takes priority)
+            if self.employment_menu:
+                self.employment_menu.hide()
+        elif any_sheep_selected or any_male_human_selected or any_female_human_selected:
+            # Entities selected but NOT clicking on town hall - show entity menus as normal
             # Calculate how many menus we'll show
             current_x_offset = mouse_x
             
-            # Calculate maximum menu height (in case Auto option appears)
-            max_menu_height = 120  # Maximum height if Auto appears
+            # Calculate maximum menu height (in case Auto option and Fire option appear)
+            max_menu_height = 147  # Maximum height: base menu (120) + fire option (27)
             
             # Clamp menu Y position to playable area
             menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - max_menu_height))
@@ -558,19 +764,34 @@ class InputSystem:
                 self.game_state.show_female_human_context_menu = False
             
             self.game_state.show_player_context_menu = False
+            
+            # Hide employment menu when showing entity menus
+            if self.employment_menu:
+                self.employment_menu.hide()
         else:
+            # No entities selected - check if clicking on a town hall for employment menu
+            if not self.game_state.build_mode and clicked_townhall and self.employment_menu:
+                # Show employment menu for this town hall (only when no entities are selected)
+                self.employment_menu.show(clicked_townhall, mouse_x, mouse_y)
+                # Hide all other context menus
+                self.game_state.show_context_menu = False
+                self.game_state.show_male_human_context_menu = False
+                self.game_state.show_female_human_context_menu = False
+                self.game_state.show_player_context_menu = False
+                return
+            
             # Show player context menu - clamp to playable area
-            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - 220))
+            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - 284))
             self.game_state.show_context_menu = False
             self.game_state.show_male_human_context_menu = False
             self.game_state.show_female_human_context_menu = False
             self.game_state.show_player_context_menu = True
             self.game_state.player_context_menu_x = mouse_x
             self.game_state.player_context_menu_y = menu_y
-        
-        # Hide employment menu when showing other context menus
-        if self.employment_menu:
-            self.employment_menu.hide()
+            
+            # Hide employment menu when showing player menu
+            if self.employment_menu:
+                self.employment_menu.hide()
     
     def _handle_mouse_up(self, event):
         """Handle mouse button release"""
@@ -658,7 +879,9 @@ class InputSystem:
     
     def _check_male_human_context_menu_click(self, mx, my, game_state):
         """Check if clicking on male human context menu"""
-        context_menu_height = 120  # Follow, Stay, Harvest, Auto (always shown)
+        base_height = 120  # Follow, Stay, Harvest, Auto
+        fire_section_start = base_height
+        total_height = base_height + 50  # Include fire section
         context_menu_width = 100
         x = self.game_state.male_human_context_menu_x
         y = self.game_state.male_human_context_menu_y
@@ -668,20 +891,28 @@ class InputSystem:
             # Follow: y+20 to y+50
             # Stay: y+50 to y+77
             # Harvest: y+77 to y+104
-            # Auto: y+104 to y+120
+            # Auto: y+104 to y+base_height
             if y + 20 <= my <= y + 50:
                 return "follow"
             elif y + 50 <= my <= y + 77:
                 return "stay"
             elif y + 77 <= my <= y + 104:
                 return "harvest"
-            elif y + 104 <= my <= y + context_menu_height:
+            elif y + 104 <= my <= y + fire_section_start:
                 return "auto"
+            elif y + fire_section_start <= my <= y + fire_section_start + 27:
+                # Check if fire option is shown (only if selected humans are employed)
+                selected_male_humans = [h for h in game_state.human_list if h.selected and h.gender == "male"]
+                has_employed_selected = any(h.is_employed for h in selected_male_humans)
+                if has_employed_selected:
+                    return "fire"
         return None
     
     def _check_female_human_context_menu_click(self, mx, my, game_state):
         """Check if clicking on female human context menu"""
-        context_menu_height = 100  # Follow, Stay, Auto (always shown)
+        base_height = 100  # Follow, Stay, Auto
+        fire_section_start = base_height
+        total_height = base_height + 50  # Include fire section
         context_menu_width = 100
         x = self.game_state.female_human_context_menu_x
         y = self.game_state.female_human_context_menu_y
@@ -690,24 +921,31 @@ class InputSystem:
             # Title area is y to y+20
             # Follow: y+20 to y+50
             # Stay: y+50 to y+77
-            # Auto: y+77 to y+100
+            # Auto: y+77 to y+base_height
             if y + 20 <= my <= y + 50:
                 return "follow"
             elif y + 50 <= my <= y + 77:
                 return "stay"
-            elif y + 77 <= my <= y + context_menu_height:
+            elif y + 77 <= my <= y + fire_section_start:
                 return "auto"
+            elif y + fire_section_start <= my <= y + fire_section_start + 27:
+                # Check if fire option is shown (only if selected humans are employed)
+                selected_female_humans = [h for h in game_state.human_list if h.selected and h.gender == "female"]
+                has_employed_selected = any(h.is_employed for h in selected_female_humans)
+                if has_employed_selected:
+                    return "fire"
         return None
     
     def _check_player_menu_click(self, mx, my):
         """Check if clicking on player context menu"""
         context_menu_width = 160
-        context_menu_height = 210  # Increased for 7 options (including salt yard and hut)
+        num_build_options = 11
+        context_menu_height = num_build_options * 27  # Height without fire section
         x = self.game_state.player_context_menu_x
         y = self.game_state.player_context_menu_y
         
         if x <= mx <= x + context_menu_width:
-            # Menu items aligned with separators at y+30, y+57, y+84, y+111, y+138, y+165
+            # Check build options
             if y <= my <= y + 30:
                 return "build_pen"
             elif y + 30 <= my <= y + 57:
@@ -720,6 +958,14 @@ class InputSystem:
                 return "build_ironyard"
             elif y + 138 <= my <= y + 165:
                 return "build_saltyard"
-            elif y + 165 <= my <= y + context_menu_height:
+            elif y + 165 <= my <= y + 192:
+                return "build_woolshed"
+            elif y + 192 <= my <= y + 219:
+                return "build_barleyfarm"
+            elif y + 219 <= my <= y + 246:
+                return "build_silo"
+            elif y + 246 <= my <= y + 273:
+                return "build_mill"
+            elif y + 273 <= my <= y + context_menu_height:
                 return "build_hut"
         return None

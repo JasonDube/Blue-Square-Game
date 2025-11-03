@@ -33,7 +33,7 @@ class ContextMenuRenderer:
             )
         
         if game_state.show_player_context_menu:
-            self._draw_player_menu(screen, game_state.player_context_menu_x, game_state.player_context_menu_y)
+            self._draw_player_menu(screen, game_state.player_context_menu_x, game_state.player_context_menu_y, game_state)
     
     def _draw_sheep_menu(self, screen, x, y):
         """Draw sheep context menu"""
@@ -59,8 +59,13 @@ class ContextMenuRenderer:
     
     def _draw_male_human_menu(self, screen, x, y, game_state):
         """Draw male human context menu"""
-        # Always show Auto option for all humans
-        height = 120  # Follow, Stay, Harvest, Auto
+        # Calculate height based on options + fire option
+        base_height = 120  # Follow, Stay, Harvest, Auto
+        fire_section_height = 27  # Fire option (single line)
+        # Check if selected humans are employed to show fire option
+        selected_male_humans = [h for h in game_state.human_list if h.selected and h.gender == "male"]
+        has_employed_selected = any(h.is_employed for h in selected_male_humans)
+        height = base_height + (fire_section_height if has_employed_selected else 0)
         width = 100
         
         # Draw background
@@ -90,11 +95,27 @@ class ContextMenuRenderer:
         pygame.draw.line(screen, BLACK, (x, y + 20), (x + width, y + 20), 1)
         pygame.draw.line(screen, BLACK, (x, y + 50), (x + width, y + 50), 1)
         pygame.draw.line(screen, BLACK, (x, y + 77), (x + width, y + 77), 1)
+        
+        # Draw "Fire" option (only if selected humans are employed)
+        fire_y = y + base_height
+        selected_male_humans = [h for h in game_state.human_list if h.selected and h.gender == "male"]
+        has_employed_selected = any(h.is_employed for h in selected_male_humans)
+        
+        if has_employed_selected:
+            fire_text = self.font.render("Fire", True, BLACK)
+            screen.blit(fire_text, (x + 10, fire_y + 3))
+            # Draw separator before fire option
+            pygame.draw.line(screen, BLACK, (x, fire_y), (x + width, fire_y), 2)
     
     def _draw_female_human_menu(self, screen, x, y, game_state):
         """Draw female human context menu"""
-        # Always show Auto option for all humans
-        height = 100  # Follow, Stay, Auto
+        # Calculate height based on options + fire option
+        base_height = 100  # Follow, Stay, Auto
+        fire_section_height = 27  # Fire option (single line)
+        # Check if selected humans are employed to show fire option
+        selected_female_humans = [h for h in game_state.human_list if h.selected and h.gender == "female"]
+        has_employed_selected = any(h.is_employed for h in selected_female_humans)
+        height = base_height + (fire_section_height if has_employed_selected else 0)
         width = 100
         
         # Draw background
@@ -121,23 +142,39 @@ class ContextMenuRenderer:
         # Draw separators
         pygame.draw.line(screen, BLACK, (x, y + 20), (x + width, y + 20), 1)
         pygame.draw.line(screen, BLACK, (x, y + 50), (x + width, y + 50), 1)
+        
+        # Draw "Fire" option (only if selected humans are employed)
+        fire_y = y + base_height
+        selected_female_humans = [h for h in game_state.human_list if h.selected and h.gender == "female"]
+        has_employed_selected = any(h.is_employed for h in selected_female_humans)
+        
+        if has_employed_selected:
+            fire_text = self.font.render("Fire", True, BLACK)
+            screen.blit(fire_text, (x + 10, fire_y + 3))
+            # Draw separator before fire option
+            pygame.draw.line(screen, BLACK, (x, fire_y), (x + width, fire_y), 2)
     
-    def _draw_player_menu(self, screen, x, y):
-        """Draw player context menu"""
+    def _draw_player_menu(self, screen, x, y, game_state):
+        """Draw player context menu (build menu when nothing selected)"""
         width = 160
-        height = 210  # Increased for 7 options (including salt yard and hut)
+        num_build_options = 11
+        height = num_build_options * 27  # 27 pixels per option
         
         # Draw background
         pygame.draw.rect(screen, GRAY, (x, y, width, height))
         pygame.draw.rect(screen, BLACK, (x, y, width, height), 2)
         
-        # Draw options
+        # Draw build options
         build_pen_text = self.font.render("Build Pen", True, BLACK)
         build_townhall_text = self.font.render("Build Town Hall", True, BLACK)
         build_lumberyard_text = self.font.render("Build Lumber Yard", True, BLACK)
         build_stoneyard_text = self.font.render("Build Stone Yard", True, BLACK)
         build_ironyard_text = self.font.render("Build Iron Yard", True, BLACK)
         build_saltyard_text = self.font.render("Build Salt Yard", True, BLACK)
+        build_woolshed_text = self.font.render("Build Wool Shed", True, BLACK)
+        build_barleyfarm_text = self.font.render("Build Barley Farm", True, BLACK)
+        build_silo_text = self.font.render("Build Silo", True, BLACK)
+        build_mill_text = self.font.render("Build Mill", True, BLACK)
         build_hut_text = self.font.render("Build Hut", True, BLACK)
         
         screen.blit(build_pen_text, (x + 10, y + 5))
@@ -146,12 +183,12 @@ class ContextMenuRenderer:
         screen.blit(build_stoneyard_text, (x + 10, y + 86))
         screen.blit(build_ironyard_text, (x + 10, y + 113))
         screen.blit(build_saltyard_text, (x + 10, y + 140))
-        screen.blit(build_hut_text, (x + 10, y + 167))
+        screen.blit(build_woolshed_text, (x + 10, y + 167))
+        screen.blit(build_barleyfarm_text, (x + 10, y + 194))
+        screen.blit(build_silo_text, (x + 10, y + 221))
+        screen.blit(build_mill_text, (x + 10, y + 248))
+        screen.blit(build_hut_text, (x + 10, y + 275))
         
-        # Draw separators
-        pygame.draw.line(screen, BLACK, (x, y + 30), (x + width, y + 30), 1)
-        pygame.draw.line(screen, BLACK, (x, y + 57), (x + width, y + 57), 1)
-        pygame.draw.line(screen, BLACK, (x, y + 84), (x + width, y + 84), 1)
-        pygame.draw.line(screen, BLACK, (x, y + 111), (x + width, y + 111), 1)
-        pygame.draw.line(screen, BLACK, (x, y + 138), (x + width, y + 138), 1)
-        pygame.draw.line(screen, BLACK, (x, y + 165), (x + width, y + 165), 1)
+        # Draw separators for build options
+        for i in range(num_build_options):
+            pygame.draw.line(screen, BLACK, (x, y + 30 + i * 27), (x + width, y + 30 + i * 27), 1)

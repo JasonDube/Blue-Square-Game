@@ -19,7 +19,7 @@ class DayCycleSystem:
         """Update time and handle day transitions"""
         self.elapsed_time += dt
         
-        # Check if we're in the dusk period (last 30 seconds of day)
+        # Check if we're in the dusk period (last DUSK_FADE_DURATION seconds of day)
         time_until_day_end = self.day_duration - self.elapsed_time
         if time_until_day_end <= DUSK_FADE_DURATION and time_until_day_end > 0:
             # Entering dusk - mark transition start
@@ -34,7 +34,7 @@ class DayCycleSystem:
         # Check if we've completed the full transition cycle
         if self.is_transitioning:
             transition_elapsed = self.elapsed_time - (self.day_duration - DUSK_FADE_DURATION)
-            # Dusk fade (0-30s) + wait (30-60s) + dawn fade (60-90s) = 90 seconds total
+            # Dusk fade (0-DUSK_FADE_DURATION) + wait (DUSK_FADE_DURATION-2*DUSK_FADE_DURATION) + dawn fade (2*DUSK_FADE_DURATION-3*DUSK_FADE_DURATION) = 3*DUSK_FADE_DURATION seconds total (halved)
             if transition_elapsed >= DUSK_FADE_DURATION * 3:
                 # Transition complete - reset for new day
                 self.is_transitioning = False
@@ -56,6 +56,9 @@ class DayCycleSystem:
             
             # Handle grass regrowth
             self._regrow_grass(game_state.eaten_pixels)
+            
+            # Handle wool regrowth (every 3 game days)
+            self._regrow_wool(game_state)
         
         # Note: elapsed_time continues past day_duration during transition
         # It will be reset after the full transition completes (in update method)
@@ -125,3 +128,13 @@ class DayCycleSystem:
                 return int(200 * (1.0 - dawn_progress))  # Fade from dark to light
         
         return 0  # No overlay needed
+    
+    def _regrow_wool(self, game_state):
+        """Regrow wool on sheep that were sheared 3 or more days ago"""
+        for sheep in game_state.sheep_list:
+            if not sheep.has_wool and sheep.wool_regrowth_day is not None:
+                # Check if 3 or more days have passed
+                days_since_sheared = self.current_day - sheep.wool_regrowth_day
+                if days_since_sheared >= 3:
+                    sheep.has_wool = True
+                    sheep.wool_regrowth_day = None

@@ -14,9 +14,10 @@ class HUD:
     
     def draw(self, screen, game_state, day_cycle, resource_system):
         """Draw the HUD bar at top of screen"""
-        # Draw black bar background
-        pygame.draw.rect(screen, BLACK, (0, 0, SCREEN_WIDTH, self.bar_height))
-        pygame.draw.rect(screen, WHITE, (0, 0, SCREEN_WIDTH, self.bar_height), 1)
+        # Draw dark grey bar background
+        from constants import DARK_GREY
+        pygame.draw.rect(screen, DARK_GREY, (0, 0, SCREEN_WIDTH, self.bar_height))
+        pygame.draw.rect(screen, BLACK, (0, 0, SCREEN_WIDTH, self.bar_height), 1)
         
         # Draw sheep counter on left
         self._draw_sheep_counter(screen, game_state)
@@ -27,11 +28,14 @@ class HUD:
         # Draw average happiness (heart icon)
         self._draw_average_happiness(screen, game_state)
         
-        # Draw resources (logs, stone, etc.) in middle-left
+        # Draw resources (logs, stone, etc.) in middle-left (with tooltips)
         self._draw_resources(screen, resource_system)
         
         # Draw day/time on right
         self._draw_day_time(screen, day_cycle)
+        
+        # Draw tooltips for resource icons if mouse is hovering
+        self._draw_resource_tooltips(screen, resource_system)
     
     def _draw_sheep_counter(self, screen, game_state):
         """Draw sheep icon and count"""
@@ -126,6 +130,9 @@ class HUD:
         """Draw resource icons and counts"""
         from systems.resource_system import ResourceType, ResourceVisualizer
         
+        # Initialize resource icon rects dictionary
+        self._resource_icon_rects = {}
+        
         # Start position after human counters/happiness (or sheep counter if no humans method called)
         if hasattr(self, '_happiness_end_x'):
             start_x = self._happiness_end_x
@@ -142,7 +149,10 @@ class HUD:
             (ResourceType.IRON, "Iron"),
             (ResourceType.SALT, "Salt"),
             (ResourceType.WOOL, "Wool"),
-            (ResourceType.MEAT, "Meat")
+            (ResourceType.MEAT, "Meat"),
+            (ResourceType.BARLEY, "Barley"),
+            (ResourceType.FLOUR, "Flour"),
+            (ResourceType.MALT, "Malt")
         ]
         
         for resource_type, label in resources_to_show:
@@ -155,7 +165,25 @@ class HUD:
                 # Draw resource icon (scaled down to fit in HUD)
                 icon_y = (self.bar_height - visual['height']) // 2
                 
-                if visual['shape'] == 'rect':
+                # Special case: Draw malt as a barrel icon (like in the mill)
+                if resource_type == ResourceType.MALT:
+                    # Draw barrel icon with horizontal bands
+                    barrel_x = current_x
+                    barrel_y = icon_y
+                    barrel_width = visual['width']
+                    barrel_height = visual['height']
+                    # Draw filled barrel rectangle
+                    pygame.draw.rect(screen, visual['color'], 
+                                   (barrel_x, barrel_y, barrel_width, barrel_height))
+                    # Draw barrel outline
+                    pygame.draw.rect(screen, BLACK, (barrel_x, barrel_y, barrel_width, barrel_height), 1)
+                    # Draw top horizontal line (barrel band)
+                    pygame.draw.line(screen, BLACK, (barrel_x, barrel_y + 1), 
+                                   (barrel_x + barrel_width, barrel_y + 1), 1)
+                    # Draw bottom horizontal line (barrel band)
+                    pygame.draw.line(screen, BLACK, (barrel_x, barrel_y + barrel_height - 1), 
+                                   (barrel_x + barrel_width, barrel_y + barrel_height - 1), 1)
+                elif visual['shape'] == 'rect':
                     # Draw small rectangle icon
                     pygame.draw.rect(screen, visual['color'], 
                                    (current_x, icon_y, visual['width'], visual['height']))
@@ -170,18 +198,58 @@ class HUD:
                 count_x = current_x + visual['width'] + 5
                 screen.blit(count_surface, (count_x, self.bar_height // 2 - count_surface.get_height() // 2))
                 
+                # Store icon position for tooltip detection
+                icon_rect = pygame.Rect(current_x, icon_y, visual['width'] + count_surface.get_width() + 5, visual['height'])
+                if not hasattr(self, '_resource_icon_rects'):
+                    self._resource_icon_rects = {}
+                self._resource_icon_rects[resource_type] = (icon_rect, label)
+                
                 # Move to next resource position
                 current_x += visual['width'] + count_surface.get_width() + 20
     
     def _draw_day_time(self, screen, day_cycle):
-        """Draw day number and current time"""
+        """Draw year number and current time"""
         display_hour, current_minute, am_pm = day_cycle.get_time_of_day()
-        day_text = f"Day {day_cycle.current_day}: {display_hour}:{current_minute:02d} {am_pm}"
+        day_text = f"Year {day_cycle.current_day}: {display_hour}:{current_minute:02d} {am_pm}"
         
         day_surface = self.font.render(day_text, True, WHITE)
         day_rect = day_surface.get_rect()
         day_x = SCREEN_WIDTH - day_rect.width - 10
         screen.blit(day_surface, (day_x, self.bar_height // 2 - day_rect.height // 2))
+    
+    def _draw_resource_tooltips(self, screen, resource_system):
+        """Draw tooltips when mouse hovers over resource icons"""
+        if not hasattr(self, '_resource_icon_rects'):
+            return
+        
+        mouse_x, mouse_y = pygame.mouse.get_pos()
+        
+        # Check if mouse is over any resource icon
+        for resource_type, (icon_rect, label) in self._resource_icon_rects.items():
+            if icon_rect.collidepoint(mouse_x, mouse_y):
+                # Draw tooltip above the icon
+                tooltip_font = pygame.font.Font(None, 20)
+                tooltip_text = tooltip_font.render(label, True, WHITE)
+                tooltip_bg_width = tooltip_text.get_width() + 10
+                tooltip_bg_height = tooltip_text.get_height() + 6
+                tooltip_x = mouse_x
+                tooltip_y = mouse_y - tooltip_bg_height - 5
+                
+                # Clamp tooltip to screen bounds
+                if tooltip_x + tooltip_bg_width > SCREEN_WIDTH:
+                    tooltip_x = SCREEN_WIDTH - tooltip_bg_width
+                if tooltip_y < 0:
+                    tooltip_y = mouse_y + 20
+                
+                # Draw tooltip background
+                pygame.draw.rect(screen, BLACK, 
+                               (tooltip_x, tooltip_y, tooltip_bg_width, tooltip_bg_height))
+                pygame.draw.rect(screen, WHITE, 
+                               (tooltip_x, tooltip_y, tooltip_bg_width, tooltip_bg_height), 1)
+                
+                # Draw tooltip text
+                screen.blit(tooltip_text, (tooltip_x + 5, tooltip_y + 3))
+                break  # Only show one tooltip at a time
     
     def draw_box_selection(self, screen, game_state):
         """Draw box selection rectangle"""

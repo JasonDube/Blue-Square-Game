@@ -16,7 +16,7 @@ class EmploymentMenu:
         self.x = 0
         self.y = 0
         self.width = 250
-        self.height = 315  # Increased height for saltworker job option
+        self.height = 420  # Increased height for all job options including miller
     
     def show(self, townhall, x, y):
         """Show the employment menu for a specific town hall"""
@@ -166,6 +166,69 @@ class EmploymentMenu:
                                                      hire_button_y + hire_button_height//2))
         screen.blit(hire_text, hire_text_rect)
         
+        # Shearer option (female only)
+        current_y += button_spacing
+        shearer_info = self.townhall.job_slots['shearer']
+        shearer_text = f"Shearer ({shearer_info['filled']}/{shearer_info['max']})"
+        shearer_surface = self.font.render(shearer_text, True, BLACK)
+        screen.blit(shearer_surface, (self.x + 10, current_y))
+        
+        hire_button_y = current_y
+        can_hire_shearer = (unemployed_females > 0 and 
+                           self.townhall.can_hire('shearer'))
+        
+        button_color = GREEN if can_hire_shearer else GRAY
+        pygame.draw.rect(screen, button_color, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height))
+        pygame.draw.rect(screen, BLACK, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height), 2)
+        
+        hire_text_rect = hire_text.get_rect(center=(hire_button_x + hire_button_width//2, 
+                                                     hire_button_y + hire_button_height//2))
+        screen.blit(hire_text, hire_text_rect)
+        
+        # Barley farmer option
+        current_y += button_spacing
+        barleyfarmer_info = self.townhall.job_slots['barleyfarmer']
+        barleyfarmer_text = f"Barley Farmer ({barleyfarmer_info['filled']}/{barleyfarmer_info['max']})"
+        barleyfarmer_surface = self.font.render(barleyfarmer_text, True, BLACK)
+        screen.blit(barleyfarmer_surface, (self.x + 10, current_y))
+        
+        hire_button_y = current_y
+        can_hire_barleyfarmer = (unemployed_males > 0 and 
+                                self.townhall.can_hire('barleyfarmer'))
+        
+        button_color = GREEN if can_hire_barleyfarmer else GRAY
+        pygame.draw.rect(screen, button_color, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height))
+        pygame.draw.rect(screen, BLACK, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height), 2)
+        
+        hire_text_rect = hire_text.get_rect(center=(hire_button_x + hire_button_width//2, 
+                                                     hire_button_y + hire_button_height//2))
+        screen.blit(hire_text, hire_text_rect)
+        
+        # Miller option
+        current_y += button_spacing
+        miller_info = self.townhall.job_slots['miller']
+        miller_text = f"Miller ({miller_info['filled']}/{miller_info['max']})"
+        miller_surface = self.font.render(miller_text, True, BLACK)
+        screen.blit(miller_surface, (self.x + 10, current_y))
+        
+        hire_button_y = current_y
+        can_hire_miller = (unemployed_males > 0 and 
+                          self.townhall.can_hire('miller'))
+        
+        button_color = GREEN if can_hire_miller else GRAY
+        pygame.draw.rect(screen, button_color, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height))
+        pygame.draw.rect(screen, BLACK, 
+                        (hire_button_x, hire_button_y, hire_button_width, hire_button_height), 2)
+        
+        hire_text_rect = hire_text.get_rect(center=(hire_button_x + hire_button_width//2, 
+                                                     hire_button_y + hire_button_height//2))
+        screen.blit(hire_text, hire_text_rect)
+        
         # Draw close button at bottom
         close_button_y = self.y + self.height - 35
         close_button_width = 80
@@ -238,6 +301,27 @@ class EmploymentMenu:
             self._hire_saltworker(game_state)
             return True
         
+        # Shearer button
+        hire_button_y = self.y + 60 + button_spacing * 4
+        if (hire_button_x <= mouse_x <= hire_button_x + hire_button_width and
+            hire_button_y <= mouse_y <= hire_button_y + hire_button_height):
+            self._hire_shearer(game_state)
+            return True
+        
+        # Barley farmer button
+        hire_button_y = self.y + 60 + button_spacing * 5
+        if (hire_button_x <= mouse_x <= hire_button_x + hire_button_width and
+            hire_button_y <= mouse_y <= hire_button_y + hire_button_height):
+            self._hire_barleyfarmer(game_state)
+            return True
+        
+        # Miller button
+        hire_button_y = self.y + 60 + button_spacing * 6
+        if (hire_button_x <= mouse_x <= hire_button_x + hire_button_width and
+            hire_button_y <= mouse_y <= hire_button_y + hire_button_height):
+            self._hire_miller(game_state)
+            return True
+        
         return False
     
     def _hire_lumberjack(self, game_state):
@@ -277,5 +361,35 @@ class EmploymentMenu:
             if human.gender == "male" and not human.is_employed:
                 # Try to hire them
                 if self.townhall.hire_human(human, 'saltworker'):
+                    human.is_employed = True
+                    return
+    
+    def _hire_shearer(self, game_state):
+        """Hire an unemployed female as a shearer"""
+        # Find first unemployed female
+        for human in game_state.human_list:
+            if human.gender == "female" and not human.is_employed:
+                # Try to hire them
+                if self.townhall.hire_human(human, 'shearer'):
+                    human.is_employed = True
+                    return
+    
+    def _hire_barleyfarmer(self, game_state):
+        """Hire an unemployed male as a barley farmer"""
+        # Find first unemployed male
+        for human in game_state.human_list:
+            if human.gender == "male" and not human.is_employed:
+                # Try to hire them
+                if self.townhall.hire_human(human, 'barleyfarmer'):
+                    human.is_employed = True
+                    return
+    
+    def _hire_miller(self, game_state):
+        """Hire an unemployed male as a miller"""
+        # Find first unemployed male
+        for human in game_state.human_list:
+            if human.gender == "male" and not human.is_employed:
+                # Try to hire them
+                if self.townhall.hire_human(human, 'miller'):
                     human.is_employed = True
                     return

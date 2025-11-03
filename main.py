@@ -48,7 +48,7 @@ class Game:
     def _initialize_world(self):
         """Initialize game world with entities"""
         # Generate entities and buildings
-        sheep_list, human_list, pen_list, lumber_yard_list, stone_yard_list, iron_yard_list = WorldGenerator.generate_initial_entities()
+        sheep_list, human_list, pen_list, lumber_yard_list, stone_yard_list, iron_yard_list, townhall_list = WorldGenerator.generate_initial_entities()
         
         self.game_state.sheep_list = sheep_list
         self.game_state.human_list = human_list
@@ -56,8 +56,9 @@ class Game:
         self.game_state.lumber_yard_list = lumber_yard_list
         self.game_state.stone_yard_list = stone_yard_list
         self.game_state.iron_yard_list = iron_yard_list
+        self.game_state.townhall_list = townhall_list
         
-        # Generate trees
+        # Generate trees (no pen_list means trees can spawn anywhere)
         self.game_state.tree_list = WorldGenerator.generate_trees(pen_list=pen_list)
         
         # Generate rocks
@@ -82,6 +83,51 @@ class Game:
             rock_list=self.game_state.rock_list,
             iron_mine_list=self.game_state.iron_mine_list
         )
+        
+        # Clear resources under the town hall
+        if townhall_list:
+            townhall = townhall_list[0]
+            self._clear_resources_under_townhall(townhall)
+    
+    def _clear_resources_under_townhall(self, townhall):
+        """Remove trees, rocks, mines, and salt deposits that overlap with the town hall"""
+        townhall_rect = pygame.Rect(townhall.x, townhall.y, townhall.width, townhall.height)
+        
+        # Remove trees that overlap with town hall
+        trees_to_remove = []
+        for tree in self.game_state.tree_list:
+            tree_bounds = tree.get_bounds()
+            if townhall_rect.colliderect(tree_bounds):
+                trees_to_remove.append(tree)
+        for tree in trees_to_remove:
+            self.game_state.tree_list.remove(tree)
+        
+        # Remove rocks that overlap with town hall
+        rocks_to_remove = []
+        for rock in self.game_state.rock_list:
+            rock_bounds = rock.get_bounds()
+            if townhall_rect.colliderect(rock_bounds):
+                rocks_to_remove.append(rock)
+        for rock in rocks_to_remove:
+            self.game_state.rock_list.remove(rock)
+        
+        # Remove iron mines that overlap with town hall
+        mines_to_remove = []
+        for mine in self.game_state.iron_mine_list:
+            mine_bounds = mine.get_bounds()
+            if townhall_rect.colliderect(mine_bounds):
+                mines_to_remove.append(mine)
+        for mine in mines_to_remove:
+            self.game_state.iron_mine_list.remove(mine)
+        
+        # Remove salt deposits that overlap with town hall
+        salt_to_remove = []
+        for salt in self.game_state.salt_list:
+            salt_bounds = salt.get_bounds()
+            if townhall_rect.colliderect(salt_bounds):
+                salt_to_remove.append(salt)
+        for salt in salt_to_remove:
+            self.game_state.salt_list.remove(salt)
     
     def run(self):
         """Main game loop"""
@@ -117,6 +163,29 @@ class Game:
         
         # Update day cycle
         self.day_cycle.update(dt, self.game_state)
+        
+        # Update crop growth in barley farms
+        for barley_farm in self.game_state.barley_farm_list:
+            barley_farm.update_crops(self.game_state.current_day)
+        
+        # Update mills (processing and millstone rotation)
+        for mill in self.game_state.mill_list:
+            mill.update(dt)
+            # Automatically add flour and malt to resource system
+            # Calculate how much was produced since last update
+            flour_to_add = mill.get_total_flour_produced() - getattr(mill, '_last_flour_count', 0)
+            malt_to_add = mill.get_total_malt_produced() - getattr(mill, '_last_malt_count', 0)
+            
+            if flour_to_add > 0:
+                from systems.resource_system import ResourceType
+                self.resource_system.add_resource(ResourceType.FLOUR, flour_to_add)
+            if malt_to_add > 0:
+                from systems.resource_system import ResourceType
+                self.resource_system.add_resource(ResourceType.MALT, malt_to_add)
+            
+            # Track current counts for next update
+            mill._last_flour_count = mill.get_total_flour_produced()
+            mill._last_malt_count = mill.get_total_malt_produced()
         
         # Update harvest system
         self.harvest_system.update(dt, self.game_state)
@@ -278,6 +347,22 @@ class Game:
         # Draw salt yards
         for salt_yard in self.game_state.salt_yard_list:
             salt_yard.draw(self.screen, preview=False)
+        
+        # Draw wool sheds
+        for wool_shed in self.game_state.wool_shed_list:
+            wool_shed.draw(self.screen, preview=False)
+        
+        # Draw barley farms
+        for barley_farm in self.game_state.barley_farm_list:
+            barley_farm.draw(self.screen, preview=False)
+        
+        # Draw silos
+        for silo in self.game_state.silo_list:
+            silo.draw(self.screen, preview=False)
+        
+        # Draw mills
+        for mill in self.game_state.mill_list:
+            mill.draw(self.screen, preview=False)
         
         # Draw huts
         for hut in self.game_state.hut_list:

@@ -12,5 +12,9 @@ from .rock import Rock
 from .ironmine import IronMine
 from .salt import Salt
 from .saltyard import SaltYard
+from .woolshed import WoolShed
+from .barleyfarm import BarleyFarm
+from .silo import Silo
+from .mill import Mill
 
-__all__ = ['Pen', 'TownHall', 'LumberYard', 'StoneYard', 'IronYard', 'SaltYard', 'Tree', 'Sheep', 'Human', 'Hut', 'Rock', 'IronMine', 'Salt']
+__all__ = ['Pen', 'TownHall', 'LumberYard', 'StoneYard', 'IronYard', 'SaltYard', 'WoolShed', 'BarleyFarm', 'Silo', 'Mill', 'Tree', 'Sheep', 'Human', 'Hut', 'Rock', 'IronMine', 'Salt']

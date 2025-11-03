@@ -14,6 +14,7 @@ from entities.ironyard import IronYard
 from entities.rock import Rock
 from entities.ironmine import IronMine
 from entities.salt import Salt
+from entities.townhall import TownHall
 
 
 # Medieval RPG-style names
@@ -233,18 +234,11 @@ class WorldGenerator:
     
     @staticmethod
     def generate_initial_entities():
-        """Generate initial sheep, humans, pens, and buildings"""
-        # Create initial pen
-        pen_list = [Pen(400, 250, PEN_SIZE)]
-        
-        # Create initial lumber yard
-        lumber_yard_list = [LumberYard(50, 300)]
-        
-        # Create stone yard
-        stone_yard_list = [StoneYard(50, 100)]
-        
-        # Create iron yard
-        iron_yard_list = [IronYard(900, 400)]
+        """Generate initial sheep, humans, and buildings"""
+        # Start with only a town hall
+        townhall_x = SCREEN_WIDTH // 2 - 60
+        townhall_y = SCREEN_HEIGHT // 2 - 50
+        townhall_list = [TownHall(townhall_x, townhall_y)]
         
         # Create initial sheep
         sheep_list = [
@@ -252,7 +246,7 @@ class WorldGenerator:
             Sheep(350, 320, "female")
         ]
         
-        # Create initial humans - more of them for testing!
+        # Create initial humans - all start in auto mode (unemployed/wandering)
         human_list = [
             Human(200, 200, "male", name=generate_human_name("male")),
             Human(250, 200, "female", name=generate_human_name("female")),
@@ -261,4 +255,14 @@ class WorldGenerator:
             Human(200, 100, "male", name=generate_human_name("male"))
         ]
         
-        return sheep_list, human_list, pen_list, lumber_yard_list, stone_yard_list, iron_yard_list
+        # Set all humans to auto mode (wander/unemployed state)
+        for human in human_list:
+            human.state = "wander"
+        
+        # No pens or yards at start
+        pen_list = []
+        lumber_yard_list = []
+        stone_yard_list = []
+        iron_yard_list = []
+        
+        return sheep_list, human_list, pen_list, lumber_yard_list, stone_yard_list, iron_yard_list, townhall_list

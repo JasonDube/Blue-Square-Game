@@ -16,11 +16,18 @@ PLAYABLE_AREA_BOTTOM = SCREEN_HEIGHT - HUD_BOTTOM_HEIGHT
 GREEN = (0, 255, 0)
 BLUE = (0, 0, 255)
 BROWN = (139, 69, 19)
+DARK_BROWN = (80, 40, 10)  # Darker brown for barley
+WOOD_BROWN = (101, 67, 33)  # Brown wood color for mill outbuildings
 RED = (255, 0, 0)
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 YELLOW = (255, 255, 0)
 GRAY = (200, 200, 200)
+DARK_GREY = (120, 120, 120)  # Dark grey for HUD background
+ORANGE = (255, 165, 0)
+LIGHT_GREY = (220, 220, 220)
+FLOUR_BAG_COLOR = (250, 240, 230)  # Off-white/cream color
+MALT_BARREL_COLOR = (139, 90, 43)  # Brown/tan for barrel
 DARK_GREEN = (0, 180, 0)
 DARKER_GREEN = (0, 120, 0)
 DARKEST_GREEN = (0, 50, 0)  # Almost black green for happiness numbers
@@ -70,6 +77,16 @@ IRONYARD_WIDTH = 120
 IRONYARD_HEIGHT = 100
 SALTYARD_WIDTH = 50
 SALTYARD_HEIGHT = 70
+WOOLSHED_WIDTH = 50
+WOOLSHED_HEIGHT = 80
+BARLEYFARM_WIDTH = 100
+BARLEYFARM_HEIGHT = 40
+SILO_RADIUS = 30
+MILL_WIDTH = 90
+MILL_HEIGHT = 90
+MILLSTONE_RADIUS = 25
+MILLSTONE_ROTATION_SPEED = 2.0  # Radians per second
+MILL_PROCESSING_TIME = 4.0  # Seconds to process 1 barley into 2 flour
 HUT_SIZE = 50  # 50x50 square, circle fits inside
 
 # Building capacity (number of resources)
@@ -77,6 +94,9 @@ LUMBERYARD_CAPACITY = 89
 STONEYARD_CAPACITY = 70  # Updated for visual fit
 IRONYARD_CAPACITY = 90   # Updated for visual fit
 SALTYARD_CAPACITY = 35   # Salt yard capacity
+WOOLSHED_CAPACITY = 40   # Wool shed capacity
+SILO_CAPACITY = 50       # Silo capacity
+BARLEY_HARVEST_AMOUNT = 10  # Units of barley per harvest
 
 # Herd settings
 HERD_BOUNDARY_SIZE = 100
@@ -91,7 +111,7 @@ MIN_TREE_PEN_DISTANCE = 100
 
 # Day/night cycle
 DAY_DURATION = 180  # seconds (3 minutes)
-DUSK_FADE_DURATION = 30  # seconds for dusk/dawn fade
+DUSK_FADE_DURATION = 15  # seconds for dusk/dawn fade (halved from 30)
 START_HOUR = 6  # 6:00 AM
 
 # Reproduction settings

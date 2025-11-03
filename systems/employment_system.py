@@ -29,6 +29,12 @@ class EmploymentSystem:
             self._update_stoneworker(human, dt, game_state)
         elif human.job == "saltworker":
             self._update_saltworker(human, dt, game_state)
+        elif human.job == "shearer":
+            self._update_shearer(human, dt, game_state)
+        elif human.job == "barleyfarmer":
+            self._update_barleyfarmer(human, dt, game_state)
+        elif human.job == "miller":
+            self._update_miller(human, dt, game_state)
         # Future jobs: elif human.job == "farmer": ...
     
     def _update_lumberjack(self, human, dt, game_state):
@@ -847,6 +853,712 @@ class EmploymentSystem:
                 # Building full - stop working
                 self._reset_worker(human)
     
+    def _update_shearer(self, human, dt, game_state):
+        """Update a shearer - automatically shears sheep"""
+        # If carrying resource, return to wool shed
+        if human.carrying_resource:
+            self._return_to_wool_shed(human, game_state)
+            return
+        
+        # If has a target and it's still valid (has wool), continue shearing
+        if human.work_target and hasattr(human.work_target, 'has_wool') and human.work_target.has_wool:
+            self._shear_sheep(human, dt, game_state)
+            return
+        
+        # Need to find a new target - check immediately first, then use interval
+        if human.work_timer == 0.0:
+            # First check - try to find target immediately
+            self._find_sheep_target(human, game_state)
+            if human.work_target:
+                # Found target, start working
+                return
+        
+        # If no target found, wait and try again
+        human.work_timer += dt
+        if human.work_timer >= AUTO_WORK_INTERVAL:
+            human.work_timer = 0.0
+            self._find_sheep_target(human, game_state)
+    
+    def _find_sheep_target(self, human, game_state):
+        """Find nearest unsheared sheep"""
+        nearest_sheep = None
+        nearest_dist = float('inf')
+        
+        human_x = human.x + human.size/2
+        human_y = human.y + human.size/2
+        
+        # Check if there's at least one wool shed built (need somewhere to deposit)
+        if len(game_state.wool_shed_list) == 0:
+            return  # No wool sheds built yet, can't work
+        
+        for sheep in game_state.sheep_list:
+            if not sheep.has_wool:
+                continue  # Skip sheep without wool
+            
+            dist = distance(human_x, human_y, sheep.x + sheep.width/2, sheep.y + sheep.height/2)
+            if dist < AUTO_WORK_SEARCH_RADIUS and dist < nearest_dist:
+                # Find nearest sheep with wool (can find even if sheds are full)
+                nearest_sheep = sheep
+                nearest_dist = dist
+        
+        if nearest_sheep:
+            # Assign the sheep
+            human.work_target = nearest_sheep
+            human.harvest_target = nearest_sheep
+            human.harvest_timer = 0.0
+            
+            # Calculate harvest position near sheep
+            angle = random.uniform(0, 2 * math.pi)
+            radius = 10  # Close to sheep
+            human.harvest_position = (
+                nearest_sheep.x + nearest_sheep.width/2 + radius * math.cos(angle),
+                nearest_sheep.y + nearest_sheep.height/2 + radius * math.sin(angle)
+            )
+            
+            # Find wool shed (if available)
+            from systems.resource_system import ResourceType
+            for wool_shed in game_state.wool_shed_list:
+                if wool_shed.can_accept_resource():
+                    human.target_building = wool_shed
+                    human.resource_type = ResourceType.WOOL
+                    break
+    
+    def _shear_sheep(self, human, dt, game_state):
+        """Shear the assigned sheep"""
+        # Use harvest_target if available, otherwise fall back to work_target
+        sheep = human.harvest_target if human.harvest_target else human.work_target
+        
+        if not sheep:
+            # No sheep assigned - reset and find new one
+            self._reset_worker(human)
+            return
+        
+        # Restore harvest_target if it was cleared but work_target exists
+        if not human.harvest_target and human.work_target:
+            human.harvest_target = human.work_target
+        
+        # Check if sheep still has wool
+        if not sheep.has_wool:
+            # Sheep already sheared, find new one
+            human.work_target = None
+            human.harvest_target = None
+            human.harvest_position = None
+            return
+        
+        # Calculate harvest position if not set
+        if not human.harvest_position:
+            angle = random.uniform(0, 2 * math.pi)
+            radius = 10
+            human.harvest_position = (
+                sheep.x + sheep.width/2 + radius * math.cos(angle),
+                sheep.y + sheep.height/2 + radius * math.sin(angle)
+            )
+        
+        # Move to shear position
+        target_x = human.harvest_position[0] if human.harvest_position else sheep.x + sheep.width/2
+        target_y = human.harvest_position[1] if human.harvest_position else sheep.y + sheep.height/2
+        
+        dist = distance(
+            human.x + human.size/2,
+            human.y + human.size/2,
+            target_x,
+            target_y
+        )
+        
+        if dist > 5:  # Not at shear position yet
+            # Move towards shear position
+            from utils.geometry import clamp
+            
+            dx = target_x - (human.x + human.size/2)
+            dy = target_y - (human.y + human.size/2)
+            dx = (dx / dist) * human.speed
+            dy = (dy / dist) * human.speed
+            
+            old_x, old_y = human.x, human.y
+            human.x += dx
+            human.y += dy
+            
+            # Keep within playable area bounds
+            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+            
+            # Simple collision check
+            if self._check_collisions(human, game_state):
+                human.x, human.y = old_x, old_y
+        else:
+            # At shear position, shear the sheep (1-2 seconds)
+            human.harvest_timer += dt
+            
+            # Shear time is 1-2 seconds (use 1.5 seconds average)
+            shear_time = 1.5
+            if human.harvest_timer >= shear_time:
+                # Finished shearing
+                sheep.has_wool = False
+                sheep.wool_regrowth_day = game_state.current_day  # Track when sheared
+                human.harvest_timer = 0.0
+                human.carrying_resource = True
+    
+    def _return_to_wool_shed(self, human, game_state):
+        """Return to wool shed to deposit wool"""
+        from entities.woolshed import WoolShed
+        
+        building = human.target_building
+        
+        # Validate that building is actually a wool shed
+        if not building or not isinstance(building, WoolShed):
+            # Find a valid wool shed
+            for wool_shed in game_state.wool_shed_list:
+                if wool_shed.can_accept_resource():
+                    building = wool_shed
+                    human.target_building = wool_shed
+                    break
+            
+            if not building or not isinstance(building, WoolShed):
+                # No valid wool shed - reset worker
+                self._reset_worker(human)
+                return
+        
+        # Move to building
+        dist = distance(
+            human.x + human.size/2,
+            human.y + human.size/2,
+            building.x + building.width/2,
+            building.y + building.height/2
+        )
+        
+        if dist > 20:  # Not at building yet
+            from utils.geometry import clamp
+            
+            dx = (building.x + building.width/2) - (human.x + human.size/2)
+            dy = (building.y + building.height/2) - (human.y + human.size/2)
+            dx = (dx / dist) * human.speed
+            dy = (dy / dist) * human.speed
+            
+            old_x, old_y = human.x, human.y
+            human.x += dx
+            human.y += dy
+            
+            # Keep within playable area bounds
+            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+            
+            # Simple collision check
+            if self._check_collisions(human, game_state):
+                human.x, human.y = old_x, old_y
+        else:
+            # At building, deposit resource
+            from systems.resource_system import ResourceType
+            if building.add_wool():
+                self.resource_system.add_resource(ResourceType.WOOL, 1)
+                human.carrying_resource = False
+                human.harvest_timer = 0.0
+                
+                # Continue working - find next unsheared sheep
+                human.work_target = None
+                human.harvest_target = None
+                human.harvest_position = None
+            else:
+                # Building full - stop working
+                self._reset_worker(human)
+    
+    def _update_barleyfarmer(self, human, dt, game_state):
+        """Update a barley farmer - works in farm, waits for crops, then harvests"""
+        # If carrying resource, return to silo
+        if human.carrying_resource:
+            self._return_to_silo(human, game_state)
+            return
+        
+        # Find assigned farm (stored in work_target)
+        farm = human.work_target
+        
+        # If no farm assigned, find one
+        if not farm or not hasattr(farm, 'planted_day'):
+            self._find_farm(human, game_state)
+            return
+        
+        # Check if crops are ready to harvest
+        if farm.has_crops and farm.has_any_barley_to_harvest():
+            # Move to farm and harvest one barley at a time
+            self._harvest_barley_one_by_one(human, dt, game_state, farm)
+            return
+        
+        # Check if all barley has been harvested - reset farm
+        if farm.is_fully_harvested():
+            farm.reset_after_harvest()
+            return
+        
+        # Work plots in farm (moves between plots, works each for 3 seconds)
+        self._work_in_farm(human, dt, farm, game_state)
+        
+        # If all plots are worked and crops not planted yet, plant them
+        total_plots = farm.plots_x * farm.plots_y
+        if len(farm.worked_plots) >= total_plots and farm.planted_day is None:
+            farm.plant_crops(game_state.current_day)
+    
+    def _find_farm(self, human, game_state):
+        """Find a barley farm for the farmer"""
+        nearest_farm = None
+        nearest_dist = float('inf')
+        
+        human_x = human.x + human.size/2
+        human_y = human.y + human.size/2
+        
+        for farm in game_state.barley_farm_list:
+            # Check if farm already has a farmer assigned
+            has_farmer = any(
+                h.work_target == farm and h.job == "barleyfarmer" 
+                for h in game_state.human_list 
+                if h.is_employed and h != human
+            )
+            if has_farmer:
+                continue  # Farm already has a farmer
+            
+            # Calculate distance to farm center
+            farm_center_x = farm.x + farm.width / 2
+            farm_center_y = farm.y + farm.height / 2
+            dist = distance(human_x, human_y, farm_center_x, farm_center_y)
+            
+            # No distance limit - farmer can work at any distance
+            if dist < nearest_dist:
+                # Check if there's a silo to deposit in
+                if len(game_state.silo_list) > 0:
+                    nearest_farm = farm
+                    nearest_dist = dist
+        
+        if nearest_farm:
+            human.work_target = nearest_farm
+            # Find silo
+            from systems.resource_system import ResourceType
+            for silo in game_state.silo_list:
+                if silo.can_accept_resource():
+                    human.target_building = silo
+                    human.resource_type = ResourceType.BARLEY
+                    break
+    
+    def _work_in_farm(self, human, dt, farm, game_state):
+        """Farmer works plots in farm - moves to next unworked plot, works for 3 seconds"""
+        # Initialize current plot if not set
+        if not hasattr(human, 'current_plot_x') or human.current_plot_x is None:
+            # Find first unworked plot
+            found_plot = False
+            for plot_y in range(farm.plots_y):
+                for plot_x in range(farm.plots_x):
+                    if not farm.is_plot_worked(plot_x, plot_y):
+                        human.current_plot_x = plot_x
+                        human.current_plot_y = plot_y
+                        human.plot_work_timer = 0.0
+                        found_plot = True
+                        break
+                if found_plot:
+                    break
+            
+            if not found_plot:
+                # All plots worked - plant crops if not already planted
+                if farm.planted_day is None:
+                    farm.plant_crops(game_state.current_day)
+                return
+        
+        # Check if current plot is already worked, find next unworked plot
+        if farm.is_plot_worked(human.current_plot_x, human.current_plot_y):
+            # Find next unworked plot
+            found_plot = False
+            for plot_y in range(farm.plots_y):
+                for plot_x in range(farm.plots_x):
+                    if not farm.is_plot_worked(plot_x, plot_y):
+                        human.current_plot_x = plot_x
+                        human.current_plot_y = plot_y
+                        human.plot_work_timer = 0.0
+                        found_plot = True
+                        break
+                if found_plot:
+                    break
+            
+            if not found_plot:
+                # All plots worked - plant crops if not already planted
+                if farm.planted_day is None:
+                    farm.plant_crops(game_state.current_day)
+                return
+        
+        # Get target position for current plot (center of plot)
+        target_x, target_y = farm.get_plot_position(human.current_plot_x, human.current_plot_y)
+        
+        # Move to plot position
+        dist = distance(
+            human.x + human.size/2,
+            human.y + human.size/2,
+            target_x,
+            target_y
+        )
+        
+        if dist > 3:  # Not at plot center yet
+            # Move towards plot center
+            from utils.geometry import clamp
+            
+            dx = target_x - (human.x + human.size/2)
+            dy = target_y - (human.y + human.size/2)
+            dx = (dx / dist) * human.speed
+            dy = (dy / dist) * human.speed
+            
+            old_x, old_y = human.x, human.y
+            human.x += dx
+            human.y += dy
+            
+            # Keep within playable area bounds
+            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+            
+            # Simple collision check
+            if self._check_collisions(human, game_state):
+                human.x, human.y = old_x, old_y
+        else:
+            # At plot center - work for 3 seconds
+            human.plot_work_timer += dt
+            
+            if human.plot_work_timer >= 3.0:
+                # Finished working this plot - mark it as worked
+                farm.work_plot(human.current_plot_x, human.current_plot_y)
+                human.plot_work_timer = 0.0
+                # Move to next plot (will be found on next update)
+                human.current_plot_x = None
+                human.current_plot_y = None
+    
+    def _harvest_barley_one_by_one(self, human, dt, game_state, farm):
+        """Harvest barley from the farm one plot at a time"""
+        # Initialize harvest plot if not set
+        if not hasattr(human, 'harvest_plot_x') or human.harvest_plot_x is None:
+            # Find first plot with barley
+            found_plot = False
+            for plot_y in range(farm.plots_y):
+                for plot_x in range(farm.plots_x):
+                    if farm.has_barley_at_plot(plot_x, plot_y):
+                        human.harvest_plot_x = plot_x
+                        human.harvest_plot_y = plot_y
+                        human.harvest_timer = 0.0
+                        found_plot = True
+                        break
+                if found_plot:
+                    break
+            
+            if not found_plot:
+                # No more barley to harvest - reset farm
+                farm.reset_after_harvest()
+                return
+        
+        # Get target position for current harvest plot (center of plot)
+        target_x, target_y = farm.get_plot_position(human.harvest_plot_x, human.harvest_plot_y)
+        
+        # Move to plot position
+        dist = distance(
+            human.x + human.size/2,
+            human.y + human.size/2,
+            target_x,
+            target_y
+        )
+        
+        if dist > 3:  # Not at plot center yet
+            # Move towards plot center
+            from utils.geometry import clamp
+            
+            dx = target_x - (human.x + human.size/2)
+            dy = target_y - (human.y + human.size/2)
+            dx = (dx / dist) * human.speed
+            dy = (dy / dist) * human.speed
+            
+            old_x, old_y = human.x, human.y
+            human.x += dx
+            human.y += dy
+            
+            # Keep within playable area bounds
+            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+            
+            # Simple collision check
+            if self._check_collisions(human, game_state):
+                human.x, human.y = old_x, old_y
+        else:
+            # At plot center - harvest one unit (takes a moment)
+            human.harvest_timer += dt
+            
+            harvest_time = 1.0  # 1 second to harvest one unit
+            if human.harvest_timer >= harvest_time:
+                # Finished harvesting this plot - get 1 unit
+                if farm.harvest_one_barley(human.harvest_plot_x, human.harvest_plot_y):
+                    human.harvest_timer = 0.0
+                    human.carrying_resource = True
+                    human.barley_amount = 1  # Carrying 1 unit
+                    # Clear harvest plot so we can find next one after depositing
+                    human.harvest_plot_x = None
+                    human.harvest_plot_y = None
+                else:
+                    # This plot doesn't have barley anymore, find next one
+                    human.harvest_plot_x = None
+                    human.harvest_plot_y = None
+                    human.harvest_timer = 0.0
+    
+    def _return_to_silo(self, human, game_state):
+        """Return to silo to deposit barley"""
+        from entities.silo import Silo
+        from constants import BARLEY_HARVEST_AMOUNT
+        from systems.resource_system import ResourceType
+        
+        building = human.target_building
+        
+        # Validate that building is actually a silo
+        if not building or not isinstance(building, Silo):
+            # Find a valid silo
+            for silo in game_state.silo_list:
+                if silo.can_accept_resource():
+                    building = silo
+                    human.target_building = silo
+                    break
+            
+            if not building or not isinstance(building, Silo):
+                # No valid silo - reset worker
+                self._reset_worker(human)
+                return
+        
+        # Move to building
+        silo_center_x = building.x + building.radius
+        silo_center_y = building.y + building.radius
+        dist = distance(
+            human.x + human.size/2,
+            human.y + human.size/2,
+            silo_center_x,
+            silo_center_y
+        )
+        
+        if dist > 30:  # Not at silo yet
+            from utils.geometry import clamp
+            
+            dx = silo_center_x - (human.x + human.size/2)
+            dy = silo_center_y - (human.y + human.size/2)
+            dx = (dx / dist) * human.speed
+            dy = (dy / dist) * human.speed
+            
+            old_x, old_y = human.x, human.y
+            human.x += dx
+            human.y += dy
+            
+            # Keep within playable area bounds
+            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+            
+            # Simple collision check
+            if self._check_collisions(human, game_state):
+                human.x, human.y = old_x, old_y
+        else:
+            # At silo, deposit one barley unit
+            if building.add_barley():
+                self.resource_system.add_resource(ResourceType.BARLEY, 1)
+                human.carrying_resource = False
+                human.harvest_timer = 0.0
+                if hasattr(human, 'barley_amount'):
+                    delattr(human, 'barley_amount')
+                
+                # Continue working - go back to farm to harvest next plot
+                # harvest_plot_x/y will be None, so it will find next plot with barley
+            else:
+                # Silo full - stop working
+                self._reset_worker(human)
+    
+    def _update_miller(self, human, dt, game_state):
+        """Update a miller - collects barley from silos and brings to mill"""
+        mill = human.work_target
+        
+        # If no mill assigned, find one
+        if not mill or not hasattr(mill, 'millstone_radius'):
+            self._find_mill(human, game_state)
+            return
+        
+        # If carrying barley, deliver to mill
+        if human.carrying_resource and hasattr(human, 'carrying_barley') and human.carrying_barley:
+            self._deliver_barley_to_mill(human, dt, mill, game_state)
+            return
+        
+        # Otherwise, find barley in silos and collect it
+        self._collect_barley_from_silo(human, dt, game_state, mill)
+    
+    def _find_mill(self, human, game_state):
+        """Find a mill for the miller"""
+        nearest_mill = None
+        nearest_dist = float('inf')
+        
+        human_x = human.x + human.size/2
+        human_y = human.y + human.size/2
+        
+        for mill in game_state.mill_list:
+            # Check if mill already has a miller assigned
+            has_miller = any(
+                h.work_target == mill and h.job == "miller" 
+                for h in game_state.human_list 
+                if h.is_employed and h != human
+            )
+            if has_miller:
+                continue  # Mill already has a miller
+            
+            # Calculate distance to mill center
+            mill_center_x = mill.x + mill.width / 2
+            mill_center_y = mill.y + mill.height / 2
+            dist = distance(human_x, human_y, mill_center_x, mill_center_y)
+            
+            # No distance limit - miller can work at any distance
+            if dist < nearest_dist:
+                nearest_mill = mill
+                nearest_dist = dist
+        
+        if nearest_mill:
+            human.work_target = nearest_mill
+    
+    def _collect_barley_from_silo(self, human, dt, game_state, mill):
+        """Miller collects barley from silos"""
+        from systems.resource_system import ResourceType
+        
+        # Find silo with barley
+        target_silo = None
+        nearest_dist = float('inf')
+        
+        human_x = human.x + human.size/2
+        human_y = human.y + human.size/2
+        
+        for silo in game_state.silo_list:
+            if silo.barley_count > 0:
+                silo_center_x = silo.x + silo.radius
+                silo_center_y = silo.y + silo.radius
+                dist = distance(human_x, human_y, silo_center_x, silo_center_y)
+                
+                if dist < nearest_dist:
+                    target_silo = silo
+                    nearest_dist = dist
+        
+        if not target_silo:
+            # No barley available - just wander around mill
+            self._wander_in_mill(human, dt, mill, game_state)
+            return
+        
+        # Move to silo
+        silo_center_x = target_silo.x + target_silo.radius
+        silo_center_y = target_silo.y + target_silo.radius
+        
+        dist = distance(human_x, human_y, silo_center_x, silo_center_y)
+        
+        if dist > 10:  # Not close enough yet
+            dx = silo_center_x - human_x
+            dy = silo_center_y - human_y
+            dx = (dx / dist) * human.speed
+            dy = (dy / dist) * human.speed
+            
+            old_x, old_y = human.x, human.y
+            human.x += dx
+            human.y += dy
+            
+            from utils.geometry import clamp
+            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+            
+            if self._check_collisions(human, game_state):
+                human.x, human.y = old_x, old_y
+        else:
+            # At silo - collect barley
+            if target_silo.barley_count > 0:
+                target_silo.barley_count -= 1
+                self.resource_system.remove_resource(ResourceType.BARLEY, 1)
+                human.carrying_resource = True
+                human.carrying_barley = True
+                human.resource_type = ResourceType.BARLEY
+    
+    def _deliver_barley_to_mill(self, human, dt, mill, game_state):
+        """Miller delivers barley to mill and places on millstone"""
+        # Move to millstone center
+        millstone_center_x = mill.millstone_center_x
+        millstone_center_y = mill.millstone_center_y
+        
+        dist = distance(
+            human.x + human.size/2,
+            human.y + human.size/2,
+            millstone_center_x,
+            millstone_center_y
+        )
+        
+        if dist > 10:  # Not at millstone yet
+            dx = millstone_center_x - (human.x + human.size/2)
+            dy = millstone_center_y - (human.y + human.size/2)
+            dx = (dx / dist) * human.speed
+            dy = (dy / dist) * human.speed
+            
+            old_x, old_y = human.x, human.y
+            human.x += dx
+            human.y += dy
+            
+            from utils.geometry import clamp
+            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+            
+            if self._check_collisions(human, game_state):
+                human.x, human.y = old_x, old_y
+        else:
+            # At millstone - place barley
+            if mill.add_barley():
+                human.carrying_resource = False
+                human.carrying_barley = False
+                human.resource_type = None
+    
+    def _wander_in_mill(self, human, dt, mill, game_state):
+        """Miller wanders around inside mill when not working"""
+        import random
+        
+        # Keep miller within mill bounds
+        mill_left = mill.x
+        mill_right = mill.x + mill.width
+        mill_top = mill.y
+        mill_bottom = mill.y + mill.height
+        
+        margin = human.size / 2
+        min_x = mill_left + margin
+        max_x = mill_right - margin
+        min_y = mill_top + margin
+        max_y = mill_bottom - margin
+        
+        # Random movement inside mill (simple wander)
+        if not hasattr(human, 'mill_wander_timer') or human.mill_wander_timer <= 0:
+            # Pick new random target within mill
+            human.mill_target_x = random.uniform(min_x, max_x - human.size)
+            human.mill_target_y = random.uniform(min_y, max_y - human.size)
+            human.mill_wander_timer = random.uniform(2.0, 4.0)  # Wander for 2-4 seconds
+        
+        human.mill_wander_timer -= dt
+        
+        # Move towards target
+        target_x = human.mill_target_x if hasattr(human, 'mill_target_x') else human.x
+        target_y = human.mill_target_y if hasattr(human, 'mill_target_y') else human.y
+        
+        dist = distance(human.x + human.size/2, human.y + human.size/2, target_x + human.size/2, target_y + human.size/2)
+        
+        if dist > 5:
+            dx = target_x - human.x
+            dy = target_y - human.y
+            dx = (dx / max(dist, 0.1)) * human.speed * 0.5  # Slower movement inside mill
+            dy = (dy / max(dist, 0.1)) * human.speed * 0.5
+            
+            old_x, old_y = human.x, human.y
+            human.x += dx
+            human.y += dy
+            
+            # Clamp to mill bounds
+            from utils.geometry import clamp
+            human.x = clamp(human.x, min_x, max_x - human.size)
+            human.y = clamp(human.y, min_y, max_y - human.size)
+            
+            # Simple collision check
+            if self._check_collisions(human, game_state):
+                human.x, human.y = old_x, old_y
+    
     def _reset_worker(self, human):
         """Reset worker state"""
         human.work_target = None
@@ -875,4 +1587,10 @@ class EmploymentSystem:
             if iron_yard.check_collision_player(human.x, human.y):
                 return True
         # Salt yards are passable - no collision check needed
+        for wool_shed in game_state.wool_shed_list:
+            if wool_shed.check_collision_player(human.x, human.y):
+                return True
+        for silo in game_state.silo_list:
+            if silo.check_collision_player(human.x, human.y):
+                return True
         return False

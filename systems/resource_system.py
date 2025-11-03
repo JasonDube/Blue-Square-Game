@@ -2,6 +2,7 @@
 Resource management system
 """
 from constants import *
+DARK_BROWN = (80, 40, 10)  # Darker brown for barley
 
 
 class ResourceType:
@@ -12,6 +13,9 @@ class ResourceType:
     SALT = "salt"
     WOOL = "wool"
     MEAT = "meat"
+    BARLEY = "barley"
+    FLOUR = "flour"
+    MALT = "malt"
 
 
 class ResourceSystem:
@@ -25,7 +29,10 @@ class ResourceSystem:
             ResourceType.IRON: 0,
             ResourceType.SALT: 0,
             ResourceType.WOOL: 0,
-            ResourceType.MEAT: 0
+            ResourceType.MEAT: 0,
+            ResourceType.BARLEY: 0,
+            ResourceType.FLOUR: 0,
+            ResourceType.MALT: 0
         }
     
     def add_resource(self, resource_type, amount=1):
@@ -94,6 +101,24 @@ class ResourceVisualizer:
             'width': 10,
             'height': 6,
             'color': (220, 100, 100),  # Pinkish red
+            'shape': 'rect'
+        },
+        ResourceType.BARLEY: {
+            'width': 3,
+            'height': 3,
+            'color': DARK_BROWN,
+            'shape': 'rect'
+        },
+        ResourceType.FLOUR: {
+            'width': 4,
+            'height': 4,
+            'color': FLOUR_BAG_COLOR,
+            'shape': 'rect'
+        },
+        ResourceType.MALT: {
+            'width': 5,
+            'height': 5,
+            'color': MALT_BARREL_COLOR,
             'shape': 'rect'
         }
     }

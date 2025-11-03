@@ -64,10 +64,10 @@ class SaltYard:
     
     def draw(self, screen, preview=False):
         """Draw the salt yard"""
-        color = WHITE if not preview else GRAY
+        floor_color = GRAY if not preview else GRAY  # Grey floor
         
-        # Draw filled white rectangle
-        pygame.draw.rect(screen, color, (self.x, self.y, self.width, self.height))
+        # Draw filled grey rectangle (floor)
+        pygame.draw.rect(screen, floor_color, (self.x, self.y, self.width, self.height))
         # Draw border
         pygame.draw.rect(screen, BLACK, (self.x, self.y, self.width, self.height), 2)
         

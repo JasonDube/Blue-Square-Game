@@ -53,70 +53,132 @@ class HumanBehaviorSystem:
                     self._update_wander(human, dt, game_state)
     
     def _update_wander(self, human, dt, game_state):
-        """Update wandering behavior for unemployed humans"""
-        # If we have a target, move towards it
-        if human.wander_target_x is not None and human.wander_target_y is not None:
-            human_x = human.x + human.size / 2
-            human_y = human.y + human.size / 2
-            
-            dist = distance(human_x, human_y, human.wander_target_x, human.wander_target_y)
-            
-            if dist < 5:  # Reached target
-                # Stop and rest
-                human.is_wandering = False
-                human.wander_timer = 0.0
-                human.wander_duration = 0.0
-                human.wander_target_x = None
-                human.wander_target_y = None
-                # Set random rest time (negative indicates resting)
-                rest_time = random.uniform(HUMAN_STOP_MIN_TIME, HUMAN_STOP_MAX_TIME)
-                human.wander_timer = -rest_time
-            else:
-                # Move towards target
-                if human.is_wandering:
-                    dx = human.wander_target_x - human_x
-                    dy = human.wander_target_y - human_y
-                    self._apply_wander_movement(human, dx, dy, dist, game_state)
+        """Update wandering behavior for unemployed humans - they sit on the bench"""
+        # Find nearest town hall
+        nearest_townhall = None
+        nearest_dist = float('inf')
+        human_x = human.x + human.size / 2
+        human_y = human.y + human.size / 2
         
-        # Check if we're resting (negative timer means resting)
-        if human.wander_timer < 0:
-            human.wander_timer += dt
-            # Check if rest is complete (timer reached 0)
-            if human.wander_timer >= 0:
-                # Rest complete, start wandering
-                human.is_wandering = True
-                human.wander_duration = random.uniform(HUMAN_WANDER_MIN_TIME, HUMAN_WANDER_MAX_TIME)
-                human.wander_timer = 0.0
-                self._choose_wander_target(human, game_state)
-        elif human.wander_timer > 0 and human.is_wandering and human.wander_duration > 0:
-            # Not resting - increment timer and check if wander duration expired
-            human.wander_timer += dt
-            if human.wander_timer >= human.wander_duration:
-                # Stop and rest
-                human.is_wandering = False
-                human.wander_target_x = None
-                human.wander_target_y = None
-                human.wander_duration = 0.0
-                rest_time = random.uniform(HUMAN_STOP_MIN_TIME, HUMAN_STOP_MAX_TIME)
-                human.wander_timer = -rest_time
-        elif human.wander_target_x is None:
-            # No target - start wandering immediately if not resting
-            if human.wander_timer >= 0:
-                human.is_wandering = True
-                human.wander_duration = random.uniform(HUMAN_WANDER_MIN_TIME, HUMAN_WANDER_MAX_TIME)
-                human.wander_timer = 0.0
-                self._choose_wander_target(human, game_state)
+        for townhall in game_state.townhall_list:
+            townhall_x = townhall.x + townhall.width / 2
+            townhall_y = townhall.y + townhall.height / 2
+            dist = distance(human_x, human_y, townhall_x, townhall_y)
+            if dist < nearest_dist:
+                nearest_dist = dist
+                nearest_townhall = townhall
+        
+        if not nearest_townhall:
+            # No town hall - don't do anything
+            return
+        
+        # Get all unemployed humans
+        unemployed_humans = [h for h in game_state.human_list if not h.is_employed and h.state == "wander"]
+        
+        # Get bench sitting positions
+        bench_positions = nearest_townhall.get_bench_sitting_positions(human.size)
+        
+        # Find this human's index in unemployed list
+        try:
+            human_index = unemployed_humans.index(human)
+        except ValueError:
+            human_index = len(unemployed_humans)
+        
+        # If there's a spot on the bench for this human, move them there
+        if human_index < len(bench_positions):
+            target_x, target_y = bench_positions[human_index]
+            dist = distance(human_x, human_y, target_x + human.size/2, target_y + human.size/2)
+            
+            if dist > 2:  # Not at position yet
+                dx = target_x + human.size/2 - human_x
+                dy = target_y + human.size/2 - human_y
+                speed = HUMAN_WANDER_SPEED
+                dx = (dx / dist) * speed
+                dy = (dy / dist) * speed
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area
+                from utils.geometry import clamp
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
             else:
-                # Still resting, increment timer
-                human.wander_timer += dt
-        elif not human.is_wandering:
-            # Has target but not wandering - this shouldn't happen, but start wandering
-            human.is_wandering = True
-            human.wander_duration = random.uniform(HUMAN_WANDER_MIN_TIME, HUMAN_WANDER_MAX_TIME)
-            human.wander_timer = 0.0
+                # At bench position - stay there
+                human.x = target_x
+                human.y = target_y
+    
+    def _move_to_townhall_edge(self, human, townhall):
+        """Move human to sit at edge of town hall"""
+        human_x = human.x + human.size / 2
+        human_y = human.y + human.size / 2
+        townhall_x = townhall.x + townhall.width / 2
+        townhall_y = townhall.y + townhall.height / 2
+        
+        # Choose a point on the edge of the town hall
+        # Pick a random angle and place human at that edge
+        if not hasattr(human, 'townhall_sit_angle'):
+            human.townhall_sit_angle = random.uniform(0, 2 * math.pi)
+        
+        # Calculate edge position
+        angle = human.townhall_sit_angle
+        edge_x = townhall_x + math.cos(angle) * (townhall.width / 2 + human.size / 2 + 5)
+        edge_y = townhall_y + math.sin(angle) * (townhall.height / 2 + human.size / 2 + 5)
+        
+        dist = distance(human_x, human_y, edge_x, edge_y)
+        if dist > 5:
+            # Move towards edge
+            dx = edge_x - human_x
+            dy = edge_y - human_y
+            speed = HUMAN_WANDER_SPEED
+            dx = (dx / dist) * speed
+            dy = (dy / dist) * speed
+            human.x += dx
+            human.y += dy
+    
+    def _choose_townhall_wander_target(self, human, townhall, max_distance):
+        """Choose a wander target within max_distance pixels of town hall edge"""
+        townhall_x = townhall.x + townhall.width / 2
+        townhall_y = townhall.y + townhall.height / 2
+        
+        # Pick a random angle and distance
+        angle = random.uniform(0, 2 * math.pi)
+        # Distance from center: townhall_half_size + max_distance
+        townhall_half_size = max(townhall.width, townhall.height) / 2
+        distance_from_center = random.uniform(townhall_half_size + human.size, townhall_half_size + max_distance)
+        
+        target_x = townhall_x + math.cos(angle) * distance_from_center
+        target_y = townhall_y + math.sin(angle) * distance_from_center
+        
+        # Clamp to playable area
+        from utils.geometry import clamp
+        target_x = clamp(target_x, human.size / 2, SCREEN_WIDTH - human.size / 2)
+        target_y = clamp(target_y, PLAYABLE_AREA_TOP + human.size / 2, PLAYABLE_AREA_BOTTOM - human.size / 2)
+        
+        human.wander_target_x = target_x
+        human.wander_target_y = target_y
+        human.is_wandering = True
+    
+    def _constrain_to_townhall_area(self, human, townhall, max_distance):
+        """Ensure human stays within max_distance pixels of town hall edge"""
+        human_x = human.x + human.size / 2
+        human_y = human.y + human.size / 2
+        townhall_x = townhall.x + townhall.width / 2
+        townhall_y = townhall.y + townhall.height / 2
+        
+        townhall_half_size = max(townhall.width, townhall.height) / 2
+        dist_from_center = distance(human_x, human_y, townhall_x, townhall_y)
+        max_dist = townhall_half_size + max_distance
+        
+        if dist_from_center > max_dist:
+            # Move back towards town hall
+            angle = math.atan2(human_y - townhall_y, human_x - townhall_x)
+            target_x = townhall_x + math.cos(angle) * (max_dist - human.size / 2)
+            target_y = townhall_y + math.sin(angle) * (max_dist - human.size / 2)
+            human.x = target_x - human.size / 2
+            human.y = target_y - human.size / 2
     
     def _choose_wander_target(self, human, game_state):
-        """Choose a random wander target within playable area"""
+        """Choose a random wander target within playable area (legacy - not used for unemployed)"""
         # Random position within playable area
         margin = 20
         target_x = random.uniform(margin, SCREEN_WIDTH - margin)

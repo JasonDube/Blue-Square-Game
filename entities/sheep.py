@@ -25,11 +25,20 @@ class Sheep:
         self.graze_target_y = None
         self.graze_speed = SHEEP_GRAZE_SPEED
         self.gender = gender  # "male" or "female"
+        
+        # Wool tracking
+        self.has_wool = True  # Start with wool
+        self.wool_regrowth_day = None  # Day when wool was sheared (None if has wool)
     
     def draw(self, screen, debug_mode):
         """Draw the sheep with optional debug info"""
-        # Draw white oval
-        pygame.draw.ellipse(screen, WHITE, (self.x, self.y, self.width, self.height))
+        # Draw sheep based on wool state
+        if self.has_wool:
+            # Draw filled white oval when has wool
+            pygame.draw.ellipse(screen, WHITE, (self.x, self.y, self.width, self.height))
+        else:
+            # Draw unfilled oval with thin outline when sheared
+            pygame.draw.ellipse(screen, WHITE, (self.x, self.y, self.width, self.height), 1)
         
         # Draw selection indicator
         if self.selected:

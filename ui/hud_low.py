@@ -57,6 +57,14 @@ class HUDLow:
             happiness_surface = name_font.render(happiness_text, True, BLACK)
             happiness_y = name_y + name_surface.get_height() + 3  # Below the name
             screen.blit(happiness_surface, (name_x, happiness_y))
+            
+            # Draw job below happiness
+            job_name = human.job if human.job else "unemployed"
+            # Capitalize first letter for display
+            job_display = job_name.capitalize() if job_name else "Unemployed"
+            job_surface = name_font.render(job_display, True, BLACK)
+            job_y = happiness_y + happiness_surface.get_height() + 3  # Below happiness
+            screen.blit(job_surface, (name_x, job_y))
         
         # Draw border
         pygame.draw.rect(screen, BLACK, (profile_x - 2, profile_y - 2, profile_size + 4, profile_size + 4), 2)
