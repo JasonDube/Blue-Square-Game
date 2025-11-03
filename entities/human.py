@@ -52,6 +52,19 @@ class Human:
         self.sleep_target = None  # Building to sleep in (hut if available, otherwise townhall)
         self.has_home = False  # Whether human has a dedicated home (hut)
         self.home_hut = None  # The hut this human owns (None if no hut)
+        
+        # Relationship status
+        self.relationship_status = "single"  # "single" or "married"
+        
+        # Downtime attributes (for employed workers when no work available)
+        self.is_downtime = False  # Whether worker is in downtime mode
+        self.downtime_townhall = None  # Town hall to walk around in during downtime
+        self.downtime_wander_timer = 0.0  # Timer for downtime wandering
+        self.downtime_target_x = None  # Target x for downtime wandering
+        self.downtime_target_y = None  # Target y for downtime wandering
+        
+        # Pathfinding state tracking
+        self.previous_road = None  # The road segment we were previously on (to prevent oscillation)
     
     def update_happiness(self, dt, game_state):
         """Update happiness based on employment, home status, and hunger"""

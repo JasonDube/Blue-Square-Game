@@ -26,6 +26,9 @@ class GameState:
         self.silo_list = []
         self.mill_list = []
         self.hut_list = []
+        self.road_list = [] # New list for road entities
+        # Road snap points for visible clickable points
+        self.road_snap_points = []  # List of (road, snap_points_dict) tuples when in build mode
         self.tree_list = []
         self.rock_list = []
         self.iron_mine_list = []
@@ -39,7 +42,7 @@ class GameState:
         # UI state
         self.debug_mode = False
         self.build_mode = False
-        self.build_mode_type = None  # "pen", "townhall", "lumberyard", "stoneyard", "ironyard", "saltyard", "woolshed", "barleyfarm", "silo", "mill", "hut"
+        self.build_mode_type = None  # "pen", "townhall", "lumberyard", "stoneyard", "ironyard", "saltyard", "woolshed", "barleyfarm", "silo", "mill", "hut", "road"
         self.pen_rotation = 0  # 0 = top, 1 = right, 2 = bottom, 3 = left
         
         # Selection state
@@ -63,8 +66,27 @@ class GameState:
         self.female_human_context_menu_y = 0
         
         self.show_player_context_menu = False
+        self.show_resource_context_menu = False
+        self.resource_context_menu_x = 0
+        self.resource_context_menu_y = 0
         self.player_context_menu_x = 0
         self.player_context_menu_y = 0
+        
+        # Family tree dialogue box state
+        self.show_family_tree_dialogue = False
+        self.family_tree_dialogue_x = SCREEN_WIDTH // 2 - 250  # Center initially
+        self.family_tree_dialogue_y = SCREEN_HEIGHT // 2 - 300  # Center initially
+        self.family_tree_dialogue_dragging = False
+        self.family_tree_dialogue_drag_offset_x = 0
+        self.family_tree_dialogue_drag_offset_y = 0
+        
+        # Profile info dialogue box state
+        self.show_profile_info_dialogue = False
+        self.profile_info_dialogue_x = SCREEN_WIDTH // 2 - 250  # Center initially
+        self.profile_info_dialogue_y = SCREEN_HEIGHT // 2 - 300  # Center initially
+        self.profile_info_dialogue_dragging = False
+        self.profile_info_dialogue_drag_offset_x = 0
+        self.profile_info_dialogue_drag_offset_y = 0
     
     def get_selected_sheep(self):
         """Get list of selected sheep"""
@@ -89,6 +111,13 @@ class GameState:
     def any_female_human_selected(self):
         """Check if any female humans are selected"""
         return any(human.selected and human.gender == "female" for human in self.human_list)
+    
+    def any_resource_selected(self):
+        """Check if any resources (trees, rocks, salt, iron mines) are selected"""
+        return (any(tree.selected for tree in self.tree_list) or
+                any(rock.selected for rock in self.rock_list) or
+                any(salt.selected for salt in self.salt_list) or
+                any(mine.selected for mine in self.iron_mine_list))
     
     def get_herd_center(self):
         """Calculate the center of the sheep herd"""

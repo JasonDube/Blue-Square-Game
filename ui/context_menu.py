@@ -34,6 +34,9 @@ class ContextMenuRenderer:
         
         if game_state.show_player_context_menu:
             self._draw_player_menu(screen, game_state.player_context_menu_x, game_state.player_context_menu_y, game_state)
+        
+        if game_state.show_resource_context_menu:
+            self._draw_resource_menu(screen, game_state.resource_context_menu_x, game_state.resource_context_menu_y, game_state)
     
     def _draw_sheep_menu(self, screen, x, y):
         """Draw sheep context menu"""
@@ -154,10 +157,23 @@ class ContextMenuRenderer:
             # Draw separator before fire option
             pygame.draw.line(screen, BLACK, (x, fire_y), (x + width, fire_y), 2)
     
+    def _draw_resource_menu(self, screen, x, y, game_state):
+        """Draw resource context menu (for selected trees, rocks, salt, iron mines)"""
+        width = 120
+        height = 40
+        
+        # Draw background
+        pygame.draw.rect(screen, GRAY, (x, y, width, height))
+        pygame.draw.rect(screen, BLACK, (x, y, width, height), 2)
+        
+        # Draw Remove option
+        remove_text = self.font.render("Remove", True, BLACK)
+        screen.blit(remove_text, (x + 10, y + 8))
+    
     def _draw_player_menu(self, screen, x, y, game_state):
         """Draw player context menu (build menu when nothing selected)"""
         width = 160
-        num_build_options = 11
+        num_build_options = 12
         height = num_build_options * 27  # 27 pixels per option
         
         # Draw background
@@ -176,6 +192,7 @@ class ContextMenuRenderer:
         build_silo_text = self.font.render("Build Silo", True, BLACK)
         build_mill_text = self.font.render("Build Mill", True, BLACK)
         build_hut_text = self.font.render("Build Hut", True, BLACK)
+        build_road_text = self.font.render("Build Road", True, BLACK)
         
         screen.blit(build_pen_text, (x + 10, y + 5))
         screen.blit(build_townhall_text, (x + 10, y + 32))
@@ -188,6 +205,7 @@ class ContextMenuRenderer:
         screen.blit(build_silo_text, (x + 10, y + 221))
         screen.blit(build_mill_text, (x + 10, y + 248))
         screen.blit(build_hut_text, (x + 10, y + 275))
+        screen.blit(build_road_text, (x + 10, y + 302))
         
         # Draw separators for build options
         for i in range(num_build_options):

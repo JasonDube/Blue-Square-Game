@@ -8,6 +8,7 @@ from entities.townhall import TownHall
 from entities.lumberyard import LumberYard
 from entities.stoneyard import StoneYard
 from entities.ironyard import IronYard
+from entities.road import Road
 
 
 class InputSystem:
@@ -44,6 +45,7 @@ class InputSystem:
         """Handle escape key - exit build mode or signal quit"""
         if self.game_state.build_mode:
             self.game_state.build_mode = False
+            self.game_state.build_mode_type = None
             return False  # Don't quit
         return True  # Signal to quit
     
@@ -73,6 +75,66 @@ class InputSystem:
     
     def _handle_left_click(self, mouse_x, mouse_y):
         """Handle left click actions"""
+        # Check if clicking on family tree dialogue box
+        if self.game_state.show_family_tree_dialogue:
+            # Check if clicking close button
+            if hasattr(self.game_state, 'family_tree_dialogue_close_button_rect'):
+                if self.game_state.family_tree_dialogue_close_button_rect.collidepoint(mouse_x, mouse_y):
+                    self.game_state.show_family_tree_dialogue = False
+                    return
+            
+            # Check if clicking on drag bar (for dragging)
+            if hasattr(self.game_state, 'family_tree_dialogue_drag_bar_rect'):
+                if self.game_state.family_tree_dialogue_drag_bar_rect.collidepoint(mouse_x, mouse_y):
+                    # Start dragging
+                    if hasattr(self.game_state, 'family_tree_dialogue_rect'):
+                        dialog_rect = self.game_state.family_tree_dialogue_rect
+                        self.game_state.family_tree_dialogue_dragging = True
+                        self.game_state.family_tree_dialogue_drag_offset_x = mouse_x - dialog_rect.x
+                        self.game_state.family_tree_dialogue_drag_offset_y = mouse_y - dialog_rect.y
+                    return
+        
+        # Check if clicking on profile info dialogue box
+        if self.game_state.show_profile_info_dialogue:
+            # Check if clicking close button
+            if hasattr(self.game_state, 'profile_info_dialogue_close_button_rect'):
+                if self.game_state.profile_info_dialogue_close_button_rect.collidepoint(mouse_x, mouse_y):
+                    self.game_state.show_profile_info_dialogue = False
+                    return
+            
+            # Check if clicking on drag bar (for dragging)
+            if hasattr(self.game_state, 'profile_info_dialogue_drag_bar_rect'):
+                if self.game_state.profile_info_dialogue_drag_bar_rect.collidepoint(mouse_x, mouse_y):
+                    # Start dragging
+                    if hasattr(self.game_state, 'profile_info_dialogue_rect'):
+                        dialog_rect = self.game_state.profile_info_dialogue_rect
+                        self.game_state.profile_info_dialogue_dragging = True
+                        self.game_state.profile_info_dialogue_drag_offset_x = mouse_x - dialog_rect.x
+                        self.game_state.profile_info_dialogue_drag_offset_y = mouse_y - dialog_rect.y
+                    return
+        
+        # Check if clicking on family tree square in lower HUD
+        if hasattr(self.game_state, 'family_tree_square_rect'):
+            if self.game_state.family_tree_square_rect.collidepoint(mouse_x, mouse_y):
+                # Open family tree dialogue
+                self.game_state.show_family_tree_dialogue = True
+                from constants import SCREEN_WIDTH, SCREEN_HEIGHT
+                # Center the dialogue initially
+                self.game_state.family_tree_dialogue_x = SCREEN_WIDTH // 2 - 250
+                self.game_state.family_tree_dialogue_y = SCREEN_HEIGHT // 2 - 300
+                return
+        
+        # Check if clicking on profile picture in lower HUD
+        if hasattr(self.game_state, 'profile_picture_rect'):
+            if self.game_state.profile_picture_rect.collidepoint(mouse_x, mouse_y):
+                # Open profile info dialogue
+                self.game_state.show_profile_info_dialogue = True
+                from constants import SCREEN_WIDTH, SCREEN_HEIGHT
+                # Center the dialogue initially
+                self.game_state.profile_info_dialogue_x = SCREEN_WIDTH // 2 - 250
+                self.game_state.profile_info_dialogue_y = SCREEN_HEIGHT // 2 - 300
+                return
+        
         # Check if in harvest cursor mode
         if self.harvest_system and self.harvest_system.harvest_cursor_active:
             self._handle_harvest_target_selection(mouse_x, mouse_y)
@@ -97,6 +159,9 @@ class InputSystem:
             # Check for entity click first (single selection)
             if self._try_select_entity(mouse_x, mouse_y):
                 return
+            
+            # Clicked empty space - deselect all entities
+            self._deselect_all()
             
             # Start box selection
             self.game_state.box_selecting = True
@@ -132,6 +197,12 @@ class InputSystem:
             if not salt.is_depleted():
                 if building_rect.colliderect(salt.get_bounds()):
                     return False
+        
+        # Check collision with existing roads
+        for road in self.game_state.road_list:
+            road_rect = pygame.Rect(road.x, road.y, road.width, road.height)
+            if building_rect.colliderect(road_rect):
+                return False
         
         # Check collision with existing buildings
         for pen in self.game_state.pen_list:
@@ -355,6 +426,28 @@ class InputSystem:
                 clicked_menu = True
                 self.game_state.show_male_human_context_menu = False
         
+        if self.game_state.show_resource_context_menu:
+            option = self._check_resource_context_menu_click(mouse_x, mouse_y, self.game_state)
+            if option:
+                if option == "remove":
+                    # Remove selected resources
+                    trees_to_remove = [tree for tree in self.game_state.tree_list if tree.selected]
+                    rocks_to_remove = [rock for rock in self.game_state.rock_list if rock.selected]
+                    salt_to_remove = [salt for salt in self.game_state.salt_list if salt.selected]
+                    mines_to_remove = [mine for mine in self.game_state.iron_mine_list if mine.selected]
+                    
+                    for tree in trees_to_remove:
+                        self.game_state.tree_list.remove(tree)
+                    for rock in rocks_to_remove:
+                        self.game_state.rock_list.remove(rock)
+                    for salt in salt_to_remove:
+                        self.game_state.salt_list.remove(salt)
+                    for mine in mines_to_remove:
+                        self.game_state.iron_mine_list.remove(mine)
+                    
+                    clicked_menu = True
+                    self.game_state.show_resource_context_menu = False
+        
         if self.game_state.show_female_human_context_menu:
             option = self._check_female_human_context_menu_click(mouse_x, mouse_y, self.game_state)
             if option:
@@ -469,6 +562,9 @@ class InputSystem:
             elif option == "build_hut":
                 self.game_state.build_mode = True
                 self.game_state.build_mode_type = "hut"
+            elif option == "build_road":
+                self.game_state.build_mode = True
+                self.game_state.build_mode_type = "road"
             self.game_state.show_player_context_menu = False
             return True
         return False
@@ -696,6 +792,47 @@ class InputSystem:
                 self.game_state.hut_list.append(Hut(hut_x, hut_y))
                 self.game_state.build_mode = False
                 self.game_state.build_mode_type = None
+        elif self.game_state.build_mode_type == "road":
+            # Check if clicking on a snap point first
+            import math
+            clicked_snap_point = None
+            clicked_road = None
+            
+            for existing_road, snap_points in self.game_state.road_snap_points:
+                for point_name, (px, py) in snap_points.items():
+                    # Check if click is within snap point radius
+                    point_radius = 5
+                    dist = math.sqrt((mouse_x - px)**2 + (mouse_y - py)**2)
+                    if dist <= point_radius:
+                        clicked_snap_point = point_name
+                        clicked_road = existing_road
+                        break
+                if clicked_snap_point:
+                    break
+            
+            if clicked_snap_point and clicked_road:
+                # Place road based on clicked snap point
+                import math
+                placement = self._get_road_placement_from_snap_point(clicked_road, clicked_snap_point, mouse_x, mouse_y)
+                if placement:
+                    road_x, road_y, rotation = placement
+                    if self._check_placement_valid(road_x, road_y,
+                                                   60 if rotation == 0 else 30,
+                                                   30 if rotation == 0 else 60):
+                        new_road = Road(road_x, road_y, rotation)
+                        self.game_state.road_list.append(new_road)
+                        # Keep build mode active for continuous placement
+            else:
+                # Normal placement (not clicking on snap point)
+                placement = self._get_road_placement_with_auto_connect(mouse_x, mouse_y)
+                if placement:
+                    road_x, road_y, rotation = placement
+                    if self._check_placement_valid(road_x, road_y, 
+                                                   60 if rotation == 0 else 30, 
+                                                   30 if rotation == 0 else 60):
+                        new_road = Road(road_x, road_y, rotation)
+                        self.game_state.road_list.append(new_road)
+                        # Keep build mode active for continuous placement
     
     def _handle_right_click(self, mouse_x, mouse_y):
         """Handle right click - show context menus"""
@@ -703,6 +840,7 @@ class InputSystem:
         any_sheep_selected = self.game_state.any_sheep_selected()
         any_male_human_selected = self.game_state.any_male_human_selected()
         any_female_human_selected = self.game_state.any_female_human_selected()
+        any_resource_selected = self.game_state.any_resource_selected()
         
         # Check if clicking on a town hall
         clicked_townhall = None
@@ -713,7 +851,21 @@ class InputSystem:
                     break
         
         # If entities are selected AND clicking on a town hall, show player menu instead of employment menu
-        if (any_sheep_selected or any_male_human_selected or any_female_human_selected) and clicked_townhall:
+        # Or if resources are selected, show resource menu
+        if any_resource_selected:
+            # Show resource context menu
+            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - 50))
+            self.game_state.show_resource_context_menu = True
+            self.game_state.resource_context_menu_x = mouse_x
+            self.game_state.resource_context_menu_y = menu_y
+            # Hide all other menus
+            self.game_state.show_context_menu = False
+            self.game_state.show_male_human_context_menu = False
+            self.game_state.show_female_human_context_menu = False
+            self.game_state.show_player_context_menu = False
+            if self.employment_menu:
+                self.employment_menu.hide()
+        elif (any_sheep_selected or any_male_human_selected or any_female_human_selected) and clicked_townhall:
             # Show player context menu - clamp to playable area
             menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - 284))
             self.game_state.show_context_menu = False
@@ -795,8 +947,18 @@ class InputSystem:
     
     def _handle_mouse_up(self, event):
         """Handle mouse button release"""
-        if event.button == 1 and self.game_state.box_selecting:
-            self._complete_box_selection()
+        if event.button == 1:
+            # Stop dragging family tree dialogue
+            if self.game_state.family_tree_dialogue_dragging:
+                self.game_state.family_tree_dialogue_dragging = False
+            
+            # Stop dragging profile info dialogue
+            if self.game_state.profile_info_dialogue_dragging:
+                self.game_state.profile_info_dialogue_dragging = False
+            
+            # Handle box selection
+            if self.game_state.box_selecting:
+                self._complete_box_selection()
     
     def _try_select_entity(self, mouse_x, mouse_y):
         """Try to select a single entity at the click position. Returns True if an entity was clicked."""
@@ -804,10 +966,7 @@ class InputSystem:
         for human in reversed(self.game_state.human_list):  # Reverse to check top entities first
             if human.contains_point(mouse_x, mouse_y):
                 # Single click selection - deselect all, then select this one
-                for h in self.game_state.human_list:
-                    h.selected = False
-                for s in self.game_state.sheep_list:
-                    s.selected = False
+                self._deselect_all()
                 human.selected = True
                 return True
         
@@ -815,17 +974,68 @@ class InputSystem:
         for sheep in reversed(self.game_state.sheep_list):
             if sheep.contains_point(mouse_x, mouse_y):
                 # Single click selection - deselect all, then select this one
-                for h in self.game_state.human_list:
-                    h.selected = False
-                for s in self.game_state.sheep_list:
-                    s.selected = False
+                self._deselect_all()
                 sheep.selected = True
+                return True
+        
+        # Check trees (only single click, not box selection)
+        for tree in reversed(self.game_state.tree_list):
+            if tree.contains_point(mouse_x, mouse_y):
+                # Single click selection - deselect all, then select this one
+                self._deselect_all()
+                tree.selected = True
+                return True
+        
+        # Check rocks (only single click, not box selection)
+        for rock in reversed(self.game_state.rock_list):
+            if rock.contains_point(mouse_x, mouse_y):
+                # Single click selection - deselect all, then select this one
+                self._deselect_all()
+                rock.selected = True
+                return True
+        
+        # Check salt deposits (only single click, not box selection)
+        for salt in reversed(self.game_state.salt_list):
+            if salt.contains_point(mouse_x, mouse_y):
+                # Single click selection - deselect all, then select this one
+                self._deselect_all()
+                salt.selected = True
+                return True
+        
+        # Check iron mines (only single click, not box selection)
+        for mine in reversed(self.game_state.iron_mine_list):
+            if mine.contains_point(mouse_x, mouse_y):
+                # Single click selection - deselect all, then select this one
+                self._deselect_all()
+                mine.selected = True
                 return True
         
         return False
     
+    def _deselect_all(self):
+        """Deselect all entities and hide context menus"""
+        for h in self.game_state.human_list:
+            h.selected = False
+        for s in self.game_state.sheep_list:
+            s.selected = False
+        for tree in self.game_state.tree_list:
+            tree.selected = False
+        for rock in self.game_state.rock_list:
+            rock.selected = False
+        for salt in self.game_state.salt_list:
+            salt.selected = False
+        for mine in self.game_state.iron_mine_list:
+            mine.selected = False
+        
+        # Hide all context menus when deselecting
+        self.game_state.show_context_menu = False
+        self.game_state.show_male_human_context_menu = False
+        self.game_state.show_female_human_context_menu = False
+        self.game_state.show_player_context_menu = False
+        self.game_state.show_resource_context_menu = False
+    
     def _complete_box_selection(self):
-        """Complete box selection and select entities"""
+        """Complete box selection and select entities (excludes trees, rocks, salt, iron mines - they are single click only)"""
         # Check if this was a click vs drag (very small box = click)
         min_x = min(self.game_state.box_start_x, self.game_state.box_end_x)
         max_x = max(self.game_state.box_start_x, self.game_state.box_end_x)
@@ -858,8 +1068,332 @@ class InputSystem:
     
     def _handle_mouse_motion(self, event):
         """Handle mouse movement"""
-        if self.game_state.box_selecting:
+        from constants import SCREEN_WIDTH, SCREEN_HEIGHT, HUD_TOP_HEIGHT, HUD_BOTTOM_HEIGHT
+        dialog_width = 500
+        dialog_height = 600
+        mouse_x, mouse_y = event.pos
+        
+        if self.game_state.family_tree_dialogue_dragging:
+            # Update family tree dialogue box position while dragging
+            new_x = mouse_x - self.game_state.family_tree_dialogue_drag_offset_x
+            new_y = mouse_y - self.game_state.family_tree_dialogue_drag_offset_y
+            
+            # Clamp to screen bounds
+            self.game_state.family_tree_dialogue_x = max(0, min(new_x, SCREEN_WIDTH - dialog_width))
+            self.game_state.family_tree_dialogue_y = max(HUD_TOP_HEIGHT, min(new_y, SCREEN_HEIGHT - HUD_BOTTOM_HEIGHT - dialog_height))
+        elif self.game_state.profile_info_dialogue_dragging:
+            # Update profile info dialogue box position while dragging
+            new_x = mouse_x - self.game_state.profile_info_dialogue_drag_offset_x
+            new_y = mouse_y - self.game_state.profile_info_dialogue_drag_offset_y
+            
+            # Clamp to screen bounds
+            self.game_state.profile_info_dialogue_x = max(0, min(new_x, SCREEN_WIDTH - dialog_width))
+            self.game_state.profile_info_dialogue_y = max(HUD_TOP_HEIGHT, min(new_y, SCREEN_HEIGHT - HUD_BOTTOM_HEIGHT - dialog_height))
+        elif self.game_state.box_selecting:
             self.game_state.box_end_x, self.game_state.box_end_y = event.pos
+    
+    def _get_road_placement_with_auto_connect(self, mouse_x, mouse_y):
+        """Get road placement position with auto-connect to nearby roads"""
+        import math
+        
+        # Snapping distance threshold (in pixels)
+        snap_distance = 35
+        
+        # Start with user's intended placement
+        rotation = self.game_state.pen_rotation % 2  # 0 = horizontal, 1 = vertical
+        
+        if rotation == 0:
+            road_width = 60
+            road_height = 30
+        else:
+            road_width = 30
+            road_height = 60
+        
+        road_x = mouse_x - road_width // 2
+        road_y = mouse_y - road_height // 2
+        
+        # Find nearest existing road to connect to
+        # Snap points: corners (end-orthogonal), edge centers (end-to-end/T-junctions)
+        nearest_road = None
+        min_distance = snap_distance
+        best_snap_point = None
+        
+        for existing_road in self.game_state.road_list:
+            user_rotation = self.game_state.pen_rotation % 2
+            is_orthogonal = (user_rotation != existing_road.rotation)
+            
+            # Calculate all snap points for this road
+            snap_points = {}
+            
+            if existing_road.rotation == 0:  # Existing is horizontal (60x30)
+                # Corners (for end-orthogonal connections)
+                snap_points["top_left"] = (existing_road.x, existing_road.y)
+                snap_points["top_right"] = (existing_road.x + existing_road.width, existing_road.y)
+                snap_points["bottom_left"] = (existing_road.x, existing_road.y + existing_road.height)
+                snap_points["bottom_right"] = (existing_road.x + existing_road.width, existing_road.y + existing_road.height)
+                
+                # Edge centers (for end-to-end and T-junctions)
+                snap_points["left_center"] = (existing_road.x, existing_road.y + existing_road.height // 2)
+                snap_points["right_center"] = (existing_road.x + existing_road.width, existing_road.y + existing_road.height // 2)
+                snap_points["top_center"] = (existing_road.x + existing_road.width // 2, existing_road.y)
+                snap_points["bottom_center"] = (existing_road.x + existing_road.width // 2, existing_road.y + existing_road.height)
+                
+                # Center (for general T-junctions)
+                snap_points["center"] = (existing_road.x + existing_road.width // 2, existing_road.y + existing_road.height // 2)
+            else:  # Existing is vertical (30x60)
+                # Corners (for end-orthogonal connections)
+                snap_points["top_left"] = (existing_road.x, existing_road.y)
+                snap_points["top_right"] = (existing_road.x + existing_road.width, existing_road.y)
+                snap_points["bottom_left"] = (existing_road.x, existing_road.y + existing_road.height)
+                snap_points["bottom_right"] = (existing_road.x + existing_road.width, existing_road.y + existing_road.height)
+                
+                # Edge centers (for end-to-end and T-junctions)
+                snap_points["top_center"] = (existing_road.x + existing_road.width // 2, existing_road.y)
+                snap_points["bottom_center"] = (existing_road.x + existing_road.width // 2, existing_road.y + existing_road.height)
+                snap_points["left_center"] = (existing_road.x, existing_road.y + existing_road.height // 2)
+                snap_points["right_center"] = (existing_road.x + existing_road.width, existing_road.y + existing_road.height // 2)
+                
+                # Center (for general T-junctions)
+                snap_points["center"] = (existing_road.x + existing_road.width // 2, existing_road.y + existing_road.height // 2)
+            
+            # Find closest snap point
+            for point_name, (px, py) in snap_points.items():
+                dist = math.sqrt((mouse_x - px)**2 + (mouse_y - py)**2)
+                if dist < min_distance:
+                    min_distance = dist
+                    nearest_road = existing_road
+                    best_snap_point = point_name
+        
+        # If found a nearby road, snap and align based on snap point
+        if nearest_road and best_snap_point:
+            user_rotation = self.game_state.pen_rotation % 2
+            is_orthogonal = (user_rotation != nearest_road.rotation)
+            
+            if nearest_road.rotation == 0:  # Existing is horizontal
+                if is_orthogonal:
+                    # Orthogonal connection - new road is vertical
+                    rotation = 1
+                    road_width = 30
+                    road_height = 60
+                    
+                    if best_snap_point in ["top_left", "bottom_left"]:
+                        # Connect to left end
+                        road_x = nearest_road.x - road_width // 2
+                        if best_snap_point == "top_left":
+                            road_y = nearest_road.y - road_height
+                        else:
+                            road_y = nearest_road.y + nearest_road.height
+                    elif best_snap_point in ["top_right", "bottom_right"]:
+                        # Connect to right end
+                        road_x = nearest_road.x + nearest_road.width - road_width // 2
+                        if best_snap_point == "top_right":
+                            road_y = nearest_road.y - road_height
+                        else:
+                            road_y = nearest_road.y + nearest_road.height
+                    elif best_snap_point in ["top_center", "bottom_center", "center"]:
+                        # T-junction at middle
+                        road_x = nearest_road.x + nearest_road.width // 2 - road_width // 2
+                        if best_snap_point == "top_center":
+                            road_y = nearest_road.y - road_height
+                        elif best_snap_point == "bottom_center":
+                            road_y = nearest_road.y + nearest_road.height
+                        else:  # center
+                            # Use mouse Y to determine above or below
+                            if mouse_y < nearest_road.y + nearest_road.height // 2:
+                                road_y = nearest_road.y - road_height
+                            else:
+                                road_y = nearest_road.y + nearest_road.height
+                else:
+                    # Same orientation - horizontal end-to-end
+                    rotation = 0
+                    road_width = 60
+                    road_height = 30
+                    road_y = nearest_road.y
+                    
+                    if best_snap_point == "left_center":
+                        # Connect to left end
+                        road_x = nearest_road.x - road_width
+                    elif best_snap_point == "right_center":
+                        # Connect to right end
+                        road_x = nearest_road.x + nearest_road.width
+                    else:
+                        # Default: place based on mouse position
+                        if mouse_x < nearest_road.x:
+                            road_x = nearest_road.x - road_width
+                        else:
+                            road_x = nearest_road.x + nearest_road.width
+            else:  # Existing is vertical
+                if is_orthogonal:
+                    # Orthogonal connection - new road is horizontal
+                    rotation = 0
+                    road_width = 60
+                    road_height = 30
+                    
+                    if best_snap_point in ["top_left", "top_right"]:
+                        # Connect to top end
+                        road_y = nearest_road.y - road_height // 2
+                        if best_snap_point == "top_left":
+                            road_x = nearest_road.x - road_width
+                        else:
+                            road_x = nearest_road.x + nearest_road.width
+                    elif best_snap_point in ["bottom_left", "bottom_right"]:
+                        # Connect to bottom end
+                        road_y = nearest_road.y + nearest_road.height - road_height // 2
+                        if best_snap_point == "bottom_left":
+                            road_x = nearest_road.x - road_width
+                        else:
+                            road_x = nearest_road.x + nearest_road.width
+                    elif best_snap_point in ["left_center", "right_center", "center"]:
+                        # T-junction at middle
+                        road_y = nearest_road.y + nearest_road.height // 2 - road_height // 2
+                        if best_snap_point == "left_center":
+                            road_x = nearest_road.x - road_width
+                        elif best_snap_point == "right_center":
+                            road_x = nearest_road.x + nearest_road.width
+                        else:  # center
+                            # Use mouse X to determine left or right
+                            if mouse_x < nearest_road.x + nearest_road.width // 2:
+                                road_x = nearest_road.x - road_width
+                            else:
+                                road_x = nearest_road.x + nearest_road.width
+                else:
+                    # Same orientation - vertical end-to-end
+                    rotation = 1
+                    road_width = 30
+                    road_height = 60
+                    road_x = nearest_road.x
+                    
+                    if best_snap_point == "top_center":
+                        # Connect to top end
+                        road_y = nearest_road.y - road_height
+                    elif best_snap_point == "bottom_center":
+                        # Connect to bottom end
+                        road_y = nearest_road.y + nearest_road.height
+                    else:
+                        # Default: place based on mouse position
+                        if mouse_y < nearest_road.y:
+                            road_y = nearest_road.y - road_height
+                        else:
+                            road_y = nearest_road.y + nearest_road.height
+        
+        # Clamp to playable area
+        from constants import SCREEN_WIDTH, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM
+        road_x = max(0, min(road_x, SCREEN_WIDTH - road_width))
+        road_y = max(PLAYABLE_AREA_TOP, min(road_y, PLAYABLE_AREA_BOTTOM - road_height))
+        
+        return (road_x, road_y, rotation)
+    
+    def _get_road_placement_from_snap_point(self, existing_road, snap_point_name, mouse_x, mouse_y):
+        """Place road based on clicked snap point"""
+        import math
+        
+        if existing_road.rotation == 0:  # Existing is horizontal (60x30)
+            if snap_point_name in ["left_center", "right_center"]:
+                # Short side center = end-to-end connection (same orientation)
+                rotation = 0  # Horizontal
+                road_width = 60
+                road_height = 30
+                road_y = existing_road.y
+                
+                if snap_point_name == "left_center":
+                    road_x = existing_road.x - road_width
+                else:  # right_center
+                    road_x = existing_road.x + existing_road.width
+                    
+            elif snap_point_name in ["top_center", "bottom_center"]:
+                # Long side center = T-junction (orthogonal)
+                rotation = 1  # Vertical
+                road_width = 30
+                road_height = 60
+                road_x = existing_road.x + existing_road.width // 2 - road_width // 2
+                
+                if snap_point_name == "top_center":
+                    road_y = existing_road.y - road_height
+                else:  # bottom_center
+                    road_y = existing_road.y + existing_road.height
+                    
+            elif snap_point_name in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+                # Corner = L-shaped connection (orthogonal, direction based on corner)
+                # Align outer edge of new road with outer edge of existing road
+                rotation = 1  # Vertical
+                road_width = 30
+                road_height = 60
+                
+                if snap_point_name in ["top_left", "bottom_left"]:
+                    # Left corner - align left edges
+                    road_x = existing_road.x
+                    if snap_point_name == "top_left":
+                        # Closer to player (above) - L goes up
+                        road_y = existing_road.y - road_height
+                    else:  # bottom_left
+                        # Away from player (below) - L goes down
+                        road_y = existing_road.y + existing_road.height
+                else:  # top_right or bottom_right
+                    # Right corner - align right edges
+                    road_x = existing_road.x + existing_road.width - road_width
+                    if snap_point_name == "top_right":
+                        # Closer to player (above) - L goes up
+                        road_y = existing_road.y - road_height
+                    else:  # bottom_right
+                        # Away from player (below) - L goes down
+                        road_y = existing_road.y + existing_road.height
+        else:  # Existing is vertical (30x60)
+            if snap_point_name in ["top_center", "bottom_center"]:
+                # Short side center = end-to-end connection (same orientation)
+                rotation = 1  # Vertical
+                road_width = 30
+                road_height = 60
+                road_x = existing_road.x
+                
+                if snap_point_name == "top_center":
+                    road_y = existing_road.y - road_height
+                else:  # bottom_center
+                    road_y = existing_road.y + existing_road.height
+                    
+            elif snap_point_name in ["left_center", "right_center"]:
+                # Long side center = T-junction (orthogonal)
+                rotation = 0  # Horizontal
+                road_width = 60
+                road_height = 30
+                road_y = existing_road.y + existing_road.height // 2 - road_height // 2
+                
+                if snap_point_name == "left_center":
+                    road_x = existing_road.x - road_width
+                else:  # right_center
+                    road_x = existing_road.x + existing_road.width
+                    
+            elif snap_point_name in ["top_left", "top_right", "bottom_left", "bottom_right"]:
+                # Corner = L-shaped connection (orthogonal, direction based on corner)
+                # Align outer edge of new road with outer edge of existing road
+                rotation = 0  # Horizontal
+                road_width = 60
+                road_height = 30
+                
+                if snap_point_name in ["top_left", "top_right"]:
+                    # Top corner - align top edges
+                    road_y = existing_road.y
+                    if snap_point_name == "top_left":
+                        # Closer to player (left) - L goes left
+                        road_x = existing_road.x - road_width
+                    else:  # top_right
+                        # Away from player (right) - L goes right
+                        road_x = existing_road.x + existing_road.width
+                else:  # bottom_left or bottom_right
+                    # Bottom corner - align bottom edges
+                    road_y = existing_road.y + existing_road.height - road_height
+                    if snap_point_name == "bottom_left":
+                        # Closer to player (left) - L goes left
+                        road_x = existing_road.x - road_width
+                    else:  # bottom_right
+                        # Away from player (right) - L goes right
+                        road_x = existing_road.x + existing_road.width
+        
+        # Clamp to playable area
+        from constants import SCREEN_WIDTH, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM
+        road_x = max(0, min(road_x, SCREEN_WIDTH - road_width))
+        road_y = max(PLAYABLE_AREA_TOP, min(road_y, PLAYABLE_AREA_BOTTOM - road_height))
+        
+        return (road_x, road_y, rotation)
     
     def _check_sheep_context_menu_click(self, mx, my):
         """Check if clicking on sheep context menu"""
@@ -908,6 +1442,23 @@ class InputSystem:
                     return "fire"
         return None
     
+    def _check_resource_context_menu_click(self, mx, my, game_state):
+        """Check if clicking on resource context menu"""
+        if not game_state.show_resource_context_menu:
+            return None
+        
+        x = game_state.resource_context_menu_x
+        y = game_state.resource_context_menu_y
+        width = 120
+        height = 40
+        
+        if x <= mx <= x + width and y <= my <= y + height:
+            # Remove option: y to y + 40
+            if y <= my <= y + 40:
+                return "remove"
+        
+        return None
+    
     def _check_female_human_context_menu_click(self, mx, my, game_state):
         """Check if clicking on female human context menu"""
         base_height = 100  # Follow, Stay, Auto
@@ -939,7 +1490,7 @@ class InputSystem:
     def _check_player_menu_click(self, mx, my):
         """Check if clicking on player context menu"""
         context_menu_width = 160
-        num_build_options = 11
+        num_build_options = 12
         context_menu_height = num_build_options * 27  # Height without fire section
         x = self.game_state.player_context_menu_x
         y = self.game_state.player_context_menu_y
@@ -966,6 +1517,8 @@ class InputSystem:
                 return "build_silo"
             elif y + 246 <= my <= y + 273:
                 return "build_mill"
-            elif y + 273 <= my <= y + context_menu_height:
+            elif y + 273 <= my <= y + 300:
                 return "build_hut"
+            elif y + 300 <= my <= y + context_menu_height:
+                return "build_road"
         return None

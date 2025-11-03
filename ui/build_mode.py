@@ -14,6 +14,7 @@ from entities.woolshed import WoolShed
 from entities.barleyfarm import BarleyFarm
 from entities.silo import Silo
 from entities.mill import Mill
+from entities.road import Road
 
 
 class BuildModeRenderer:
@@ -55,6 +56,8 @@ class BuildModeRenderer:
             self._draw_silo_preview(screen, mouse_x, mouse_y, is_valid)
         elif game_state.build_mode_type == "mill":
             self._draw_mill_preview(screen, mouse_x, mouse_y, game_state.pen_rotation, is_valid)
+        elif game_state.build_mode_type == "road":
+            self._draw_road_preview(screen, mouse_x, mouse_y, game_state.pen_rotation, is_valid, game_state)
         
         # Draw instructions
         self._draw_instructions(screen, game_state.build_mode_type, game_state.pen_rotation, is_valid)
@@ -159,6 +162,17 @@ class BuildModeRenderer:
             height = SILO_RADIUS * 2
             preview_x = mouse_x - SILO_RADIUS
             preview_y = mouse_y - SILO_RADIUS
+        elif build_type == "road":
+            # Road dimensions based on rotation
+            rotation = game_state.pen_rotation % 2  # Only 0 or 1 for roads
+            if rotation == 0:  # Horizontal: 60x30
+                width = 60
+                height = 30
+            else:  # Vertical: 30x60
+                width = 30
+                height = 60
+            preview_x = mouse_x - width // 2
+            preview_y = mouse_y - height // 2
         else:
             return True
         
@@ -189,6 +203,12 @@ class BuildModeRenderer:
                 mine_bounds = iron_mine.get_bounds()
                 if building_rect.colliderect(mine_bounds):
                     return False
+        
+        # Check collision with existing roads
+        for road in game_state.road_list:
+            road_rect = pygame.Rect(road.x, road.y, road.width, road.height)
+            if building_rect.colliderect(road_rect):
+                return False
         
         # Check collision with existing pens
         for pen in game_state.pen_list:
@@ -543,6 +563,143 @@ class BuildModeRenderer:
         pygame.draw.rect(screen, color, (preview_x, preview_y, MILL_WIDTH, MILL_HEIGHT))
         pygame.draw.rect(screen, BLACK, (preview_x, preview_y, MILL_WIDTH, MILL_HEIGHT), 2)
     
+    def _draw_road_preview(self, screen, mouse_x, mouse_y, rotation, is_valid, game_state):
+        """Draw road preview with visible snap points on nearby roads"""
+        import math
+        from constants import YELLOW, WHITE, BLACK
+        
+        # Road rotation: 0/2 = horizontal (60x30), 1/3 = vertical (30x60)
+        rot = rotation % 2  # Only 0 or 1 for roads
+        if rot == 0:  # Horizontal: 60x30
+            width = 60
+            height = 30
+        else:  # Vertical: 30x60
+            width = 30
+            height = 60
+        
+        preview_x = mouse_x - width // 2
+        preview_y = mouse_y - height // 2
+        
+        # Check if preview is near any existing road (within snap distance)
+        snap_distance = 50  # Distance threshold to show snap points
+        nearby_roads = []
+        
+        preview_center_x = preview_x + width // 2
+        preview_center_y = preview_y + height // 2
+        
+        for existing_road in game_state.road_list:
+            road_center_x = existing_road.x + existing_road.width // 2
+            road_center_y = existing_road.y + existing_road.height // 2
+            
+            dist = math.sqrt((preview_center_x - road_center_x)**2 + 
+                           (preview_center_y - road_center_y)**2)
+            
+            # Check if preview road would overlap or be very close to existing road
+            preview_rect = pygame.Rect(preview_x, preview_y, width, height)
+            road_rect = pygame.Rect(existing_road.x, existing_road.y, 
+                                   existing_road.width, existing_road.height)
+            
+            # Expand both rects slightly to check proximity
+            expanded_preview = pygame.Rect(preview_x - 20, preview_y - 20, 
+                                          width + 40, height + 40)
+            expanded_road = pygame.Rect(existing_road.x - 20, existing_road.y - 20,
+                                        existing_road.width + 40, existing_road.height + 40)
+            
+            if expanded_preview.colliderect(expanded_road) or dist < snap_distance:
+                nearby_roads.append(existing_road)
+        
+        # Clear previous snap points
+        game_state.road_snap_points = []
+        
+        # Draw snap points on nearby roads
+        for existing_road in nearby_roads:
+            # Calculate 8 snap points: 4 corners + 4 edge centers
+            snap_points = {}
+            
+            if existing_road.rotation == 0:  # Existing is horizontal (60x30)
+                # Short sides (height = 30): left and right edges
+                # Long sides (width = 60): top and bottom edges
+                
+                # 4 corners
+                snap_points["top_left"] = (existing_road.x, existing_road.y)
+                snap_points["top_right"] = (existing_road.x + existing_road.width, existing_road.y)
+                snap_points["bottom_left"] = (existing_road.x, existing_road.y + existing_road.height)
+                snap_points["bottom_right"] = (existing_road.x + existing_road.width, existing_road.y + existing_road.height)
+                
+                # 4 edge centers
+                snap_points["left_center"] = (existing_road.x, existing_road.y + existing_road.height // 2)  # Short side
+                snap_points["right_center"] = (existing_road.x + existing_road.width, existing_road.y + existing_road.height // 2)  # Short side
+                snap_points["top_center"] = (existing_road.x + existing_road.width // 2, existing_road.y)  # Long side
+                snap_points["bottom_center"] = (existing_road.x + existing_road.width // 2, existing_road.y + existing_road.height)  # Long side
+            else:  # Existing is vertical (30x60)
+                # Short sides (width = 30): top and bottom edges
+                # Long sides (height = 60): left and right edges
+                
+                # 4 corners
+                snap_points["top_left"] = (existing_road.x, existing_road.y)
+                snap_points["top_right"] = (existing_road.x + existing_road.width, existing_road.y)
+                snap_points["bottom_left"] = (existing_road.x, existing_road.y + existing_road.height)
+                snap_points["bottom_right"] = (existing_road.x + existing_road.width, existing_road.y + existing_road.height)
+                
+                # 4 edge centers
+                snap_points["top_center"] = (existing_road.x + existing_road.width // 2, existing_road.y)  # Short side
+                snap_points["bottom_center"] = (existing_road.x + existing_road.width // 2, existing_road.y + existing_road.height)  # Short side
+                snap_points["left_center"] = (existing_road.x, existing_road.y + existing_road.height // 2)  # Long side
+                snap_points["right_center"] = (existing_road.x + existing_road.width, existing_road.y + existing_road.height // 2)  # Long side
+            
+            # Store snap points for click detection
+            game_state.road_snap_points.append((existing_road, snap_points))
+            
+            # Draw snap points as visible circles
+            point_radius = 5
+            for point_name, (px, py) in snap_points.items():
+                # Draw filled circle
+                pygame.draw.circle(screen, YELLOW, (int(px), int(py)), point_radius)
+                pygame.draw.circle(screen, BLACK, (int(px), int(py)), point_radius, 1)
+        
+        # Don't draw preview road if we're showing snap points (wait for click on snap point)
+        if nearby_roads:
+            return  # Exit early - snap points are shown, preview will be shown after click
+        
+        # If not near any road, show normal preview
+        # Clamp to screen bounds
+        from constants import SCREEN_WIDTH, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM
+        preview_x = max(0, min(preview_x, SCREEN_WIDTH - width))
+        preview_y = max(PLAYABLE_AREA_TOP, min(preview_y, PLAYABLE_AREA_BOTTOM - height))
+        
+        # Draw preview (translucent)
+        preview_color = GREEN if is_valid else RED
+        preview_surface = pygame.Surface((width, height), pygame.SRCALPHA)
+        preview_surface.fill((*LIGHT_GREY[:3], 128))  # Translucent light grey
+        screen.blit(preview_surface, (preview_x, preview_y))
+        
+        # Draw border
+        border_color = preview_color
+        pygame.draw.rect(screen, border_color, (preview_x, preview_y, width, height), 2)
+        
+        # Draw stones in preview (fewer stones for preview)
+        stone_radius = 4
+        stone_color = GRAY
+        margin = 4
+        stone_area_x = preview_x + margin
+        stone_area_y = preview_y + margin
+        stone_area_width = width - (margin * 2)
+        stone_area_height = height - (margin * 2)
+        
+        # Draw a few stones for preview (simplified)
+        stones_per_row = max(1, min(3, int(stone_area_width / (stone_radius * 3))))
+        stones_per_col = max(1, min(3, int(stone_area_height / (stone_radius * 3))))
+        
+        if stones_per_row > 0 and stones_per_col > 0:
+            spacing_x = (stone_area_width - stones_per_row * stone_radius * 2) / max(1, stones_per_row - 1) if stones_per_row > 1 else 0
+            spacing_y = (stone_area_height - stones_per_col * stone_radius * 2) / max(1, stones_per_col - 1) if stones_per_col > 1 else 0
+            
+            for row in range(stones_per_col):
+                for col in range(stones_per_row):
+                    stone_x = stone_area_x + col * (stone_radius * 2 + spacing_x) + stone_radius
+                    stone_y = stone_area_y + row * (stone_radius * 2 + spacing_y) + stone_radius
+                    pygame.draw.circle(screen, stone_color, (int(stone_x), int(stone_y)), stone_radius)
+    
     def _draw_instructions(self, screen, build_type, rotation, is_valid):
         """Draw build mode instructions at bottom of screen"""
         rotation_names = ["Top", "Right", "Bottom", "Left"]
@@ -557,7 +714,8 @@ class BuildModeRenderer:
             "barleyfarm": "Barley Farm",
             "silo": "Silo",
             "mill": "Mill",
-            "hut": "Hut"
+            "hut": "Hut",
+            "road": "Road"
         }
         build_type_name = build_type_names.get(build_type, "Structure")
         
@@ -574,6 +732,9 @@ class BuildModeRenderer:
         # Position above bottom HUD
         screen.blit(text_surface, (10, PLAYABLE_AREA_BOTTOM - 45))
         
-        hint = "Q/E or Mouse Wheel to rotate - ESC to cancel"
+        if build_type == "road":
+            hint = "Q/E or Mouse Wheel to rotate - Auto-connects to nearby roads - ESC to cancel (Continuous placement)"
+        else:
+            hint = "Q/E or Mouse Wheel to rotate - ESC to cancel"
         hint_surface = self.font.render(hint, True, WHITE)
         screen.blit(hint_surface, (10, PLAYABLE_AREA_BOTTOM - 25))

@@ -6,6 +6,7 @@ import math
 from constants import *
 from utils.geometry import distance
 from systems.resource_system import ResourceType
+from utils.pathfinding import get_road_path_target
 
 
 class HarvestSystem:
@@ -80,6 +81,9 @@ class HarvestSystem:
     
     def _harvest_resource(self, human, dt, game_state):
         """Human harvests the resource"""
+        import pygame
+        from utils.pathfinding import is_on_road
+        
         resource = human.harvest_target
         
         # Use assigned harvest position
@@ -95,19 +99,52 @@ class HarvestSystem:
         )
         
         if dist > 5:  # Not at harvest position yet (reduced from 25 for tighter positioning)
-            # Move towards harvest position
-            dx = target_x - (human.x + human.size/2)
-            dy = target_y - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
+            # Use pathfinding to get target position (may route through roads if blocked)
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, target_x, target_y, game_state, human.previous_road
+            )
             
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
+            # Update previous_road tracking - only update if we've clearly transitioned
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            # Use a more stable check to prevent rapid switching
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
             
-            # Simple collision check (revert if needed)
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Simple collision check (revert if needed)
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At harvest position, harvest the resource
             resource.being_harvested = True
@@ -122,6 +159,9 @@ class HarvestSystem:
     
     def _return_to_building(self, human, game_state):
         """Human returns to building to deposit resource"""
+        import pygame
+        from utils.pathfinding import is_on_road
+        
         # Use the building we stored when assignment was made
         building = human.target_building
         
@@ -144,18 +184,54 @@ class HarvestSystem:
         )
         
         if dist > 20:  # Not at building yet
-            dx = (building.x + building.width/2) - (human.x + human.size/2)
-            dy = (building.y + building.height/2) - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
+            # Use pathfinding to get target position (may route through roads if blocked)
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            building_x = building.x + building.width/2
+            building_y = building.y + building.height/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, building_x, building_y, game_state, human.previous_road
+            )
             
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
+            # Update previous_road tracking - only update if we've clearly transitioned
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            # Use a more stable check to prevent rapid switching
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
             
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At building, deposit resource
             deposited = False
@@ -206,19 +282,37 @@ class HarvestSystem:
     def _check_collisions(self, human, game_state):
         """Simple collision check for harvesting humans"""
         for pen in game_state.pen_list:
-            if pen.check_collision_player(human.x, human.y):
+            if pen.collision_enabled and pen.check_collision_player(human.x, human.y):
                 return True
         for townhall in game_state.townhall_list:
-            if townhall.check_collision_player(human.x, human.y):
+            if townhall.collision_enabled and townhall.check_collision_player(human.x, human.y):
                 return True
         for lumber_yard in game_state.lumber_yard_list:
-            if lumber_yard.check_collision_player(human.x, human.y):
+            if lumber_yard.collision_enabled and lumber_yard.check_collision_player(human.x, human.y):
                 return True
         for stone_yard in game_state.stone_yard_list:
-            if stone_yard.check_collision_player(human.x, human.y):
+            if stone_yard.collision_enabled and stone_yard.check_collision_player(human.x, human.y):
                 return True
         for iron_yard in game_state.iron_yard_list:
-            if iron_yard.check_collision_player(human.x, human.y):
+            if iron_yard.collision_enabled and iron_yard.check_collision_player(human.x, human.y):
+                return True
+        for salt_yard in game_state.salt_yard_list:
+            if salt_yard.collision_enabled and salt_yard.check_collision_player(human.x, human.y):
+                return True
+        for wool_shed in game_state.wool_shed_list:
+            if wool_shed.collision_enabled and wool_shed.check_collision_player(human.x, human.y):
+                return True
+        for farm in game_state.barley_farm_list:
+            if farm.collision_enabled and farm.check_collision_player(human.x, human.y):
+                return True
+        for silo in game_state.silo_list:
+            if silo.collision_enabled and silo.check_collision_player(human.x, human.y):
+                return True
+        for mill in game_state.mill_list:
+            if mill.collision_enabled and mill.check_collision_player(human.x, human.y):
+                return True
+        for hut in game_state.hut_list:
+            if hut.collision_enabled and hut.check_collision_player(human.x, human.y):
                 return True
         return False
     

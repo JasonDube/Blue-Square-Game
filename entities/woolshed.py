@@ -19,7 +19,7 @@ class WoolShed:
         else:
             self.width = WOOLSHED_WIDTH
             self.height = WOOLSHED_HEIGHT
-        self.collision_enabled = False  # Collision disabled for prototype
+        self.collision_enabled = True
         self.wool_count = 0  # Per-building resource tracking (starts at 0!)
     
     def get_button_pos(self):

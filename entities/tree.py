@@ -16,6 +16,7 @@ class Tree:
         self.crown_radius = TREE_CROWN_RADIUS
         self.health = TREE_INITIAL_HEALTH  # 20 logs per tree
         self.being_harvested = False
+        self.selected = False  # Selection state
     
     def draw(self, screen, show_health=False):
         """Draw the tree with trunk and crown"""
@@ -44,6 +45,12 @@ class Tree:
         # Draw crown (dark green circle on top)
         crown_y = self.y - self.trunk_height
         pygame.draw.circle(screen, DARK_GREEN, (self.x, crown_y), self.crown_radius)
+        
+        # Draw selection indicator if selected
+        if self.selected:
+            # Draw yellow outline around tree
+            pygame.draw.circle(screen, YELLOW, (self.x, crown_y), self.crown_radius + 2, 2)
+            pygame.draw.rect(screen, YELLOW, trunk_rect.inflate(4, 4), 2)
         
         # Draw health number if in harvest mode (only if within bounds)
         if show_health:

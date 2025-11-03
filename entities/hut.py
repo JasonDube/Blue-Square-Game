@@ -13,7 +13,7 @@ class Hut:
         self.y = y
         self.size = HUT_SIZE  # 50x50 square
         self.radius = HUT_SIZE // 2  # Circle fits within square (radius = 25)
-        self.collision_enabled = False  # Collision disabled for prototype
+        self.collision_enabled = True
         self.owner = None  # The human who owns this hut (None if unclaimed)
     
     def contains_point(self, px, py):

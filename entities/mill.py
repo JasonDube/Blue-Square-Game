@@ -17,12 +17,12 @@ class Mill:
         # Track last counts for resource system updates
         self._last_flour_count = 0
         self._last_malt_count = 0
-        self.width = MILL_WIDTH
-        self.height = MILL_HEIGHT
-        self.collision_enabled = False  # Collision disabled for prototype
+        self.width = 190  # Main building (90) + 2 outbuildings (50 each)
+        self.height = 90
+        self.collision_enabled = True
         
         # Millstone (spinning circle)
-        self.millstone_radius = MILLSTONE_RADIUS
+        self.millstone_radius = 25
         self.millstone_center_x = self.x + self.width / 2
         self.millstone_center_y = self.y + self.height / 2
         self.millstone_rotation = 0.0  # Rotation angle in radians

@@ -19,7 +19,7 @@ class StoneYard:
         else:
             self.width = STONEYARD_WIDTH
             self.height = STONEYARD_HEIGHT
-        self.collision_enabled = False  # Collision disabled for prototype
+        self.collision_enabled = True
         self.stone_count = 0  # Per-building resource tracking
     
     def get_button_pos(self):

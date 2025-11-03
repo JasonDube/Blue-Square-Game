@@ -15,6 +15,7 @@ class IronMine:
         self.height = 30
         self.health = health if health is not None else IRONMINE_INITIAL_HEALTH  # 500 iron per mine
         self.being_harvested = False
+        self.selected = False  # Selection state
     
     def draw(self, screen, show_health=False):
         """Draw the iron mine"""
@@ -25,6 +26,10 @@ class IronMine:
         pygame.draw.rect(screen, (80, 80, 80), (self.x - self.width//2, self.y - self.height//2, self.width, self.height))
         # Draw border
         pygame.draw.rect(screen, GRAY, (self.x - self.width//2, self.y - self.height//2, self.width, self.height), 2)
+        
+        # Draw selection indicator if selected
+        if self.selected:
+            pygame.draw.rect(screen, YELLOW, (self.x - self.width//2 - 3, self.y - self.height//2 - 3, self.width + 6, self.height + 6), 2)
         
         # Draw some details (ore)
         pygame.draw.circle(screen, (200, 100, 50), (self.x - 5, self.y - 5), 3)

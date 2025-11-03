@@ -5,6 +5,7 @@ import random
 import math
 from constants import *
 from utils.geometry import distance
+from utils.pathfinding import get_road_path_target
 
 
 class EmploymentSystem:
@@ -17,7 +18,11 @@ class EmploymentSystem:
         """Update all employed humans"""
         for human in game_state.human_list:
             if human.state == "employed" and human.job:
-                self._update_employed_human(human, dt, game_state)
+                # Check if in downtime mode
+                if human.is_downtime:
+                    self._update_downtime(human, dt, game_state)
+                else:
+                    self._update_employed_human(human, dt, game_state)
     
     def _update_employed_human(self, human, dt, game_state):
         """Update a single employed human"""
@@ -39,6 +44,13 @@ class EmploymentSystem:
     
     def _update_lumberjack(self, human, dt, game_state):
         """Update a lumberjack - automatically harvests trees"""
+        # Check if work is available
+        has_trees = any(not tree.is_depleted() for tree in game_state.tree_list)
+        has_space = any(ly.can_accept_resource() for ly in game_state.lumber_yard_list)
+        if not has_trees or not has_space:
+            self._enter_downtime(human, game_state)
+            return
+        
         # If carrying resource, return to lumber yard
         if human.carrying_resource:
             self._return_to_lumber_yard(human, game_state)
@@ -140,26 +152,61 @@ class EmploymentSystem:
         )
         
         if dist > 5:  # Not at harvest position yet
-            # Move towards harvest position
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
             
-            dx = target_x - (human.x + human.size/2)
-            dy = target_y - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, target_x, target_y, game_state, human.previous_road
+            )
             
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
             
-            # Keep within playable area bounds
-            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
-            
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At harvest position, harvest the tree
             tree.being_harvested = True
@@ -201,25 +248,63 @@ class EmploymentSystem:
         )
         
         if dist > 20:  # Not at building yet
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
-            
-            dx = (building.x + building.width/2) - (human.x + human.size/2)
-            dy = (building.y + building.height/2) - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
-            
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
-            
-            # Keep within playable area bounds
             from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
             
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            building_x = building.x + building.width/2
+            building_y = building.y + building.height/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, building_x, building_y, game_state, human.previous_road
+            )
+            
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
+            
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At building, deposit resource
             from systems.resource_system import ResourceType
@@ -243,6 +328,13 @@ class EmploymentSystem:
     
     def _update_miner(self, human, dt, game_state):
         """Update a miner - automatically harvests iron mines"""
+        # Check if work is available
+        has_mines = any(not mine.is_depleted() for mine in game_state.iron_mine_list)
+        has_space = any(iy.can_accept_resource() for iy in game_state.iron_yard_list)
+        if not has_mines or not has_space:
+            self._enter_downtime(human, game_state)
+            return
+        
         # If carrying resource, return to iron yard
         if human.carrying_resource:
             self._return_to_iron_yard(human, game_state)
@@ -344,26 +436,61 @@ class EmploymentSystem:
         )
         
         if dist > 5:  # Not at harvest position yet
-            # Move towards harvest position
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
             
-            dx = target_x - (human.x + human.size/2)
-            dy = target_y - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, target_x, target_y, game_state, human.previous_road
+            )
             
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
             
-            # Keep within playable area bounds
-            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
-            
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At harvest position, harvest the mine
             mine.being_harvested = True
@@ -405,25 +532,63 @@ class EmploymentSystem:
         )
         
         if dist > 20:  # Not at building yet
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
-            
-            dx = (building.x + building.width/2) - (human.x + human.size/2)
-            dy = (building.y + building.height/2) - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
-            
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
-            
-            # Keep within playable area bounds
             from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
             
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            building_x = building.x + building.width/2
+            building_y = building.y + building.height/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, building_x, building_y, game_state, human.previous_road
+            )
+            
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
+            
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At building, deposit resource
             from systems.resource_system import ResourceType
@@ -447,6 +612,13 @@ class EmploymentSystem:
     
     def _update_stoneworker(self, human, dt, game_state):
         """Update a stoneworker - automatically harvests rocks"""
+        # Check if work is available
+        has_rocks = any(not rock.is_depleted() for rock in game_state.rock_list)
+        has_space = any(sy.can_accept_resource() for sy in game_state.stone_yard_list)
+        if not has_rocks or not has_space:
+            self._enter_downtime(human, game_state)
+            return
+        
         # If carrying resource, return to stone yard
         if human.carrying_resource:
             self._return_to_stone_yard(human, game_state)
@@ -548,26 +720,61 @@ class EmploymentSystem:
         )
         
         if dist > 5:  # Not at harvest position yet
-            # Move towards harvest position
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
             
-            dx = target_x - (human.x + human.size/2)
-            dy = target_y - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, target_x, target_y, game_state, human.previous_road
+            )
             
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
             
-            # Keep within playable area bounds
-            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
-            
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At harvest position, harvest the rock
             rock.being_harvested = True
@@ -609,25 +816,63 @@ class EmploymentSystem:
         )
         
         if dist > 20:  # Not at building yet
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
-            
-            dx = (building.x + building.width/2) - (human.x + human.size/2)
-            dy = (building.y + building.height/2) - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
-            
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
-            
-            # Keep within playable area bounds
             from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
             
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            building_x = building.x + building.width/2
+            building_y = building.y + building.height/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, building_x, building_y, game_state, human.previous_road
+            )
+            
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
+            
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At building, deposit resource
             from systems.resource_system import ResourceType
@@ -752,26 +997,61 @@ class EmploymentSystem:
         )
         
         if dist > 5:  # Not at harvest position yet
-            # Move towards harvest position
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
             
-            dx = target_x - (human.x + human.size/2)
-            dy = target_y - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, target_x, target_y, game_state, human.previous_road
+            )
             
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
             
-            # Keep within playable area bounds
-            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
-            
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At harvest position, harvest the salt
             salt.being_harvested = True
@@ -813,25 +1093,63 @@ class EmploymentSystem:
         )
         
         if dist > 20:  # Not at building yet
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
-            
-            dx = (building.x + building.width/2) - (human.x + human.size/2)
-            dy = (building.y + building.height/2) - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
-            
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
-            
-            # Keep within playable area bounds
             from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
             
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            building_x = building.x + building.width/2
+            building_y = building.y + building.height/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, building_x, building_y, game_state, human.previous_road
+            )
+            
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
+            
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At building, deposit resource
             from systems.resource_system import ResourceType
@@ -855,6 +1173,13 @@ class EmploymentSystem:
     
     def _update_shearer(self, human, dt, game_state):
         """Update a shearer - automatically shears sheep"""
+        # Check if work is available
+        has_sheep = any(sheep.has_wool for sheep in game_state.sheep_list)
+        has_space = any(ws.can_accept_resource() for ws in game_state.wool_shed_list)
+        if not has_sheep or not has_space:
+            self._enter_downtime(human, game_state)
+            return
+        
         # If carrying resource, return to wool shed
         if human.carrying_resource:
             self._return_to_wool_shed(human, game_state)
@@ -896,7 +1221,8 @@ class EmploymentSystem:
                 continue  # Skip sheep without wool
             
             dist = distance(human_x, human_y, sheep.x + sheep.width/2, sheep.y + sheep.height/2)
-            if dist < AUTO_WORK_SEARCH_RADIUS and dist < nearest_dist:
+            # No proximity limit - can find sheep at any distance
+            if dist < nearest_dist:
                 # Find nearest sheep with wool (can find even if sheds are full)
                 nearest_sheep = sheep
                 nearest_dist = dist
@@ -966,26 +1292,61 @@ class EmploymentSystem:
         )
         
         if dist > 5:  # Not at shear position yet
-            # Move towards shear position
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
             
-            dx = target_x - (human.x + human.size/2)
-            dy = target_y - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, target_x, target_y, game_state, human.previous_road
+            )
             
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
             
-            # Keep within playable area bounds
-            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
-            
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At shear position, shear the sheep (1-2 seconds)
             human.harvest_timer += dt
@@ -1028,25 +1389,63 @@ class EmploymentSystem:
         )
         
         if dist > 20:  # Not at building yet
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
-            
-            dx = (building.x + building.width/2) - (human.x + human.size/2)
-            dy = (building.y + building.height/2) - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
-            
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
-            
-            # Keep within playable area bounds
             from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
             
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            building_x = building.x + building.width/2
+            building_y = building.y + building.height/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, building_x, building_y, game_state, human.previous_road
+            )
+            
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
+            
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At building, deposit resource
             from systems.resource_system import ResourceType
@@ -1065,6 +1464,21 @@ class EmploymentSystem:
     
     def _update_barleyfarmer(self, human, dt, game_state):
         """Update a barley farmer - works in farm, waits for crops, then harvests"""
+        # Check if work is available
+        has_farm_work = False
+        for farm in game_state.barley_farm_list:
+            if farm.has_crops and farm.has_any_barley_to_harvest():
+                has_farm_work = True
+                break
+            total_plots = farm.plots_x * farm.plots_y
+            if len(farm.worked_plots) < total_plots:
+                has_farm_work = True
+                break
+        has_space = any(silo.can_accept_resource() for silo in game_state.silo_list)
+        if not has_farm_work or not has_space:
+            self._enter_downtime(human, game_state)
+            return
+        
         # If carrying resource, return to silo
         if human.carrying_resource:
             self._return_to_silo(human, game_state)
@@ -1193,26 +1607,61 @@ class EmploymentSystem:
         )
         
         if dist > 3:  # Not at plot center yet
-            # Move towards plot center
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
             
-            dx = target_x - (human.x + human.size/2)
-            dy = target_y - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, target_x, target_y, game_state, human.previous_road
+            )
             
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
             
-            # Keep within playable area bounds
-            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
-            
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At plot center - work for 3 seconds
             human.plot_work_timer += dt
@@ -1259,26 +1708,61 @@ class EmploymentSystem:
         )
         
         if dist > 3:  # Not at plot center yet
-            # Move towards plot center
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
             
-            dx = target_x - (human.x + human.size/2)
-            dy = target_y - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, target_x, target_y, game_state, human.previous_road
+            )
             
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
+            # Update previous_road tracking - only update if we've clearly transitioned
+            from utils.pathfinding import is_on_road
+            from utils.geometry import distance
+            import pygame
+            current_road = is_on_road(current_x, current_y, game_state, preferred_road=human.previous_road)
+            # Only update if we've clearly moved to a different road
+            if current_road and current_road != human.previous_road:
+                # Check distance to center of new road to confirm transition
+                current_rect = pygame.Rect(current_road.x, current_road.y,
+                                          current_road.width, current_road.height)
+                dist_to_new_road_center = distance(current_x, current_y, 
+                                                   current_rect.centerx, current_rect.centery)
+                # Only switch if we're closer to the center of the new road than old road
+                if human.previous_road:
+                    old_rect = pygame.Rect(human.previous_road.x, human.previous_road.y,
+                                          human.previous_road.width, human.previous_road.height)
+                    dist_to_old_road_center = distance(current_x, current_y,
+                                                      old_rect.centerx, old_rect.centery)
+                    if dist_to_new_road_center < dist_to_old_road_center:
+                        human.previous_road = current_road
+                else:
+                    human.previous_road = current_road
+            elif not current_road:
+                # Not on any road - clear previous
+                human.previous_road = None
             
-            # Keep within playable area bounds
-            from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
-            
-            # Simple collision check
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                # Simple collision check
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At plot center - harvest one unit (takes a moment)
             human.harvest_timer += dt
@@ -1332,16 +1816,26 @@ class EmploymentSystem:
         )
         
         if dist > 30:  # Not at silo yet
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
             
-            dx = silo_center_x - (human.x + human.size/2)
-            dy = silo_center_y - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, silo_center_x, silo_center_y, game_state
+            )
             
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
             
             # Keep within playable area bounds
             from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
@@ -1368,7 +1862,20 @@ class EmploymentSystem:
     
     def _update_miller(self, human, dt, game_state):
         """Update a miller - collects barley from silos and brings to mill"""
+        # Check if work is available
+        has_barley = any(silo.barley_count > 0 for silo in game_state.silo_list)
         mill = human.work_target
+        if not mill or not hasattr(mill, 'millstone_radius'):
+            # Find a mill if not assigned
+            for m in game_state.mill_list:
+                mill = m
+                break
+        has_space = (mill is not None and 
+                    mill.can_accept_flour() and 
+                    mill.can_accept_malt())
+        if not has_barley or not has_space:
+            self._enter_downtime(human, game_state)
+            return
         
         # If no mill assigned, find one
         if not mill or not hasattr(mill, 'millstone_radius'):
@@ -1447,14 +1954,22 @@ class EmploymentSystem:
         dist = distance(human_x, human_y, silo_center_x, silo_center_y)
         
         if dist > 10:  # Not close enough yet
-            dx = silo_center_x - human_x
-            dy = silo_center_y - human_y
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
+            # Use pathfinding to get target position (may route through roads if blocked)
+            path_target_x, path_target_y = get_road_path_target(
+                human_x, human_y, silo_center_x, silo_center_y, game_state
+            )
             
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
+            # Move towards pathfinding target
+            path_dist = distance(human_x, human_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - human_x
+                dy = path_target_y - human_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
             
             from utils.geometry import clamp
             from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
@@ -1486,22 +2001,34 @@ class EmploymentSystem:
         )
         
         if dist > 10:  # Not at millstone yet
-            dx = millstone_center_x - (human.x + human.size/2)
-            dy = millstone_center_y - (human.y + human.size/2)
-            dx = (dx / dist) * human.speed
-            dy = (dy / dist) * human.speed
-            
-            old_x, old_y = human.x, human.y
-            human.x += dx
-            human.y += dy
-            
+            # Use pathfinding to get target position (may route through roads if blocked)
             from utils.geometry import clamp
             from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
-            human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
-            human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
             
-            if self._check_collisions(human, game_state):
-                human.x, human.y = old_x, old_y
+            current_x = human.x + human.size/2
+            current_y = human.y + human.size/2
+            path_target_x, path_target_y = get_road_path_target(
+                current_x, current_y, millstone_center_x, millstone_center_y, game_state
+            )
+            
+            # Move towards pathfinding target
+            path_dist = distance(current_x, current_y, path_target_x, path_target_y)
+            if path_dist > 0:
+                dx = path_target_x - current_x
+                dy = path_target_y - current_y
+                dx = (dx / path_dist) * human.speed
+                dy = (dy / path_dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                # Keep within playable area bounds
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
         else:
             # At millstone - place barley
             if mill.add_barley():
@@ -1568,6 +2095,177 @@ class EmploymentSystem:
         human.resource_type = None
         human.harvest_position = None
         human.harvest_timer = 0.0
+    
+    def _enter_downtime(self, human, game_state):
+        """Enter downtime mode - go to town hall and walk around"""
+        # Find nearest town hall
+        nearest_townhall = None
+        nearest_dist = float('inf')
+        human_x = human.x + human.size/2
+        human_y = human.y + human.size/2
+        
+        for townhall in game_state.townhall_list:
+            townhall_center_x = townhall.x + townhall.width / 2
+            townhall_center_y = townhall.y + townhall.height / 2
+            dist = distance(human_x, human_y, townhall_center_x, townhall_center_y)
+            if dist < nearest_dist:
+                nearest_townhall = townhall
+                nearest_dist = dist
+        
+        if nearest_townhall:
+            human.is_downtime = True
+            human.downtime_townhall = nearest_townhall
+            human.downtime_wander_timer = 0.0
+            human.downtime_target_x = None
+            human.downtime_target_y = None
+            # Reset work state
+            self._reset_worker(human)
+    
+    def _update_downtime(self, human, dt, game_state):
+        """Update downtime behavior - walk around randomly inside town hall"""
+        townhall = human.downtime_townhall
+        
+        # Check if work is available again
+        if self._check_work_available(human, game_state):
+            human.is_downtime = False
+            human.downtime_townhall = None
+            return
+        
+        if not townhall:
+            # No town hall found, exit downtime
+            human.is_downtime = False
+            return
+        
+        # Check if inside town hall
+        human_center_x = human.x + human.size/2
+        human_center_y = human.y + human.size/2
+        is_inside = (townhall.x < human_center_x < townhall.x + townhall.width and
+                    townhall.y < human_center_y < townhall.y + townhall.height)
+        
+        if not is_inside:
+            # Move towards town hall center
+            townhall_center_x = townhall.x + townhall.width / 2
+            townhall_center_y = townhall.y + townhall.height / 2
+            
+            dist = distance(human_center_x, human_center_y, townhall_center_x, townhall_center_y)
+            if dist > 5:
+                dx = townhall_center_x - human_center_x
+                dy = townhall_center_y - human_center_y
+                dx = (dx / dist) * human.speed
+                dy = (dy / dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                from utils.geometry import clamp
+                from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
+        else:
+            # Inside town hall - wander around randomly
+            if human.downtime_target_x is None or human.downtime_wander_timer >= 3.0:
+                # Pick new random position inside town hall
+                margin = 10  # Stay away from edges
+                human.downtime_target_x = random.uniform(
+                    townhall.x + margin, 
+                    townhall.x + townhall.width - margin - human.size
+                )
+                human.downtime_target_y = random.uniform(
+                    townhall.y + margin, 
+                    townhall.y + townhall.height - margin - human.size
+                )
+                human.downtime_wander_timer = 0.0
+            
+            # Move towards target
+            dist = distance(
+                human.x + human.size/2, 
+                human.y + human.size/2,
+                human.downtime_target_x + human.size/2,
+                human.downtime_target_y + human.size/2
+            )
+            
+            if dist > 5:
+                dx = human.downtime_target_x - human.x
+                dy = human.downtime_target_y - human.y
+                dx = (dx / dist) * human.speed
+                dy = (dy / dist) * human.speed
+                
+                old_x, old_y = human.x, human.y
+                human.x += dx
+                human.y += dy
+                
+                from utils.geometry import clamp
+                from constants import PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM, SCREEN_WIDTH
+                human.x = clamp(human.x, 0, SCREEN_WIDTH - human.size)
+                human.y = clamp(human.y, PLAYABLE_AREA_TOP, PLAYABLE_AREA_BOTTOM - human.size)
+                
+                if self._check_collisions(human, game_state):
+                    human.x, human.y = old_x, old_y
+            else:
+                # Reached target, stop for a moment
+                human.downtime_wander_timer += dt
+    
+    def _check_work_available(self, human, game_state):
+        """Check if work is available for the worker"""
+        if human.job == "lumberjack":
+            # Check if there are trees and lumberyards with space
+            has_trees = any(not tree.is_depleted() for tree in game_state.tree_list)
+            has_space = any(ly.can_accept_resource() for ly in game_state.lumber_yard_list)
+            return has_trees and has_space
+        
+        elif human.job == "stoneworker":
+            # Check if there are rocks and stone yards with space
+            has_rocks = any(not rock.is_depleted() for rock in game_state.rock_list)
+            has_space = any(sy.can_accept_resource() for sy in game_state.stone_yard_list)
+            return has_rocks and has_space
+        
+        elif human.job == "miner":
+            # Check if there are iron mines and iron yards with space
+            has_mines = any(not mine.is_depleted() for mine in game_state.iron_mine_list)
+            has_space = any(iy.can_accept_resource() for iy in game_state.iron_yard_list)
+            return has_mines and has_space
+        
+        elif human.job == "miller":
+            # Check if there's barley available and mill has space
+            has_barley = any(silo.barley_count > 0 for silo in game_state.silo_list)
+            mill = human.work_target
+            if not mill or not hasattr(mill, 'can_accept_flour'):
+                # Find a mill if not assigned
+                for m in game_state.mill_list:
+                    mill = m
+                    break
+            has_space = (mill is not None and 
+                        mill.can_accept_flour() and 
+                        mill.can_accept_malt())
+            return has_barley and has_space
+        
+        elif human.job == "barleyfarmer":
+            # Check if there's a farm with crops or work to do, and silo has space
+            has_farm_work = False
+            for farm in game_state.barley_farm_list:
+                # Check if farm has barley to harvest or plots to work
+                if farm.has_crops and farm.has_any_barley_to_harvest():
+                    has_farm_work = True
+                    break
+                # Check if farm has unworked plots
+                total_plots = farm.plots_x * farm.plots_y
+                if len(farm.worked_plots) < total_plots:
+                    has_farm_work = True
+                    break
+            has_space = any(silo.can_accept_resource() for silo in game_state.silo_list)
+            return has_farm_work and has_space
+        
+        elif human.job == "shearer":
+            # Check if there are sheep with wool and wool shed has space
+            has_sheep = any(sheep.has_wool for sheep in game_state.sheep_list)
+            has_space = any(ws.can_accept_resource() for ws in game_state.wool_shed_list)
+            return has_sheep and has_space
+        
+        return True  # Default: work available
     
     def _check_collisions(self, human, game_state):
         """Simple collision check for employed workers"""

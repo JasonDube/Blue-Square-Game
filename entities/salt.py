@@ -14,6 +14,7 @@ class Salt:
         self.size = 10
         self.health = health if health is not None else SALT_INITIAL_HEALTH
         self.being_harvested = False
+        self.selected = False  # Selection state
     
     def draw(self, screen, show_health=False):
         """Draw the salt deposit"""
@@ -23,6 +24,10 @@ class Salt:
         # Draw white salt crystal
         pygame.draw.circle(screen, WHITE, (self.x, self.y), self.size)
         pygame.draw.circle(screen, (200, 200, 200), (self.x, self.y), self.size, 1)  # Light gray border
+        
+        # Draw selection indicator if selected
+        if self.selected:
+            pygame.draw.circle(screen, YELLOW, (self.x, self.y), self.size + 3, 2)
         
         # Draw health if requested
         if show_health:

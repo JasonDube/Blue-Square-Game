@@ -14,6 +14,7 @@ class Rock:
         self.size = 12
         self.health = health if health is not None else ROCK_INITIAL_HEALTH  # 100 stones per rock
         self.being_harvested = False
+        self.selected = False  # Selection state
     
     def draw(self, screen, show_health=False):
         """Draw the rock"""
@@ -22,6 +23,10 @@ class Rock:
         
         # Draw gray rock
         pygame.draw.circle(screen, GRAY, (self.x, self.y), self.size)
+        
+        # Draw selection indicator if selected
+        if self.selected:
+            pygame.draw.circle(screen, YELLOW, (self.x, self.y), self.size + 3, 2)
         
         # Draw health if requested
         if show_health:

@@ -287,11 +287,11 @@ class Game:
         # Draw entities
         self._draw_entities()
         
-        # Draw UI
-        self._draw_ui()
-        
         # Draw player
         self._draw_player()
+        
+        # Draw UI (includes dialogue boxes that should be on top)
+        self._draw_ui()
     
     def _draw_terrain(self):
         """Draw terrain (eaten grass pixels)"""
@@ -367,6 +367,10 @@ class Game:
         # Draw huts
         for hut in self.game_state.hut_list:
             hut.draw(self.screen, preview=False)
+        
+        # Draw roads
+        for road in self.game_state.road_list:
+            road.draw(self.screen, preview=False)
     
     def _draw_entities(self):
         """Draw sheep and humans"""
@@ -402,6 +406,12 @@ class Game:
         # Draw HUDs (must be last to be on top)
         self.hud.draw(self.screen, self.game_state, self.day_cycle, self.resource_system)
         self.hud_low.draw(self.screen, self.game_state)
+        
+        # Draw dialogue boxes on top of everything (including player)
+        if self.game_state.show_family_tree_dialogue:
+            self.hud_low._draw_family_tree_dialogue(self.screen, self.game_state)
+        if self.game_state.show_profile_info_dialogue:
+            self.hud_low._draw_profile_info_dialogue(self.screen, self.game_state)
         
         # Draw darkness overlay for dusk/dawn (on top of everything)
         self._draw_darkness_overlay()

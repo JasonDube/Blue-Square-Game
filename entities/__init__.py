@@ -16,5 +16,6 @@ from .woolshed import WoolShed
 from .barleyfarm import BarleyFarm
 from .silo import Silo
 from .mill import Mill
+from .road import Road
 
-__all__ = ['Pen', 'TownHall', 'LumberYard', 'StoneYard', 'IronYard', 'SaltYard', 'WoolShed', 'BarleyFarm', 'Silo', 'Mill', 'Tree', 'Sheep', 'Human', 'Hut', 'Rock', 'IronMine', 'Salt']
+__all__ = ['Pen', 'TownHall', 'LumberYard', 'StoneYard', 'IronYard', 'SaltYard', 'WoolShed', 'BarleyFarm', 'Silo', 'Mill', 'Road', 'Tree', 'Sheep', 'Human', 'Hut', 'Rock', 'IronMine', 'Salt']

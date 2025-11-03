@@ -19,7 +19,7 @@ class SaltYard:
         else:
             self.width = SALTYARD_WIDTH
             self.height = SALTYARD_HEIGHT
-        self.collision_enabled = False  # Passable - no collision
+        self.collision_enabled = True
         self.salt_count = 0  # Per-building resource tracking
     
     def get_button_pos(self):

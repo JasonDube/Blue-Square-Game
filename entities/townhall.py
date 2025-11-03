@@ -19,7 +19,7 @@ class TownHall:
         else:
             self.width = TOWNHALL_WIDTH
             self.height = TOWNHALL_HEIGHT
-        self.collision_enabled = False  # Collision disabled for prototype
+        self.collision_enabled = False  # Passable for testing purposes
         
         # Employment tracking
         self.employed_humans = []  # List of humans employed at this town hall
@@ -189,7 +189,7 @@ class TownHall:
             pygame.draw.rect(screen, BLACK, bench_rect, 1)
         
         # Draw stored resources if not preview and resource system exists
-        # Town halls only store wool and meat (logs/stones/iron have dedicated buildings)
+        # Town halls only store meat (logs/stones/iron/wool have dedicated buildings)
         if not preview and resource_system:
             self._draw_stored_resources(screen, resource_system)
     
@@ -197,11 +197,10 @@ class TownHall:
         """Draw visual representation of stored resources"""
         from systems.resource_system import ResourceVisualizer, ResourceType
         
-        # Town halls only store resources WITHOUT dedicated buildings (wool, meat)
-        # Logs, stones, and iron have their own storage buildings
+        # Town halls only store resources WITHOUT dedicated buildings (meat only now, wool goes to wool sheds)
+        # Logs, stones, iron, and wool have their own storage buildings
         all_resources = resource_system.get_all_resources()
         townhall_resources = {
-            ResourceType.WOOL: all_resources.get(ResourceType.WOOL, 0),
             ResourceType.MEAT: all_resources.get(ResourceType.MEAT, 0)
         }
         

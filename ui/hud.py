@@ -49,6 +49,12 @@ class HUD:
         count_surface = self.font.render(sheep_count_text, True, WHITE)
         count_x = sheep_icon_x + 10
         screen.blit(count_surface, (count_x, self.bar_height // 2 - count_surface.get_height() // 2))
+        
+        # Store icon position for tooltip detection
+        sheep_icon_rect = pygame.Rect(sheep_icon_x, sheep_icon_y, 6 + count_surface.get_width() + 5, 4)
+        if not hasattr(self, '_icon_rects'):
+            self._icon_rects = {}
+        self._icon_rects['sheep'] = (sheep_icon_rect, "Sheep")
     
     def _draw_human_counters(self, screen, game_state):
         """Draw male and female human counters"""
@@ -71,6 +77,12 @@ class HUD:
         male_count_x = male_icon_x + icon_size + 5
         screen.blit(male_count_surface, (male_count_x, self.bar_height // 2 - male_count_surface.get_height() // 2))
         
+        # Store male icon position for tooltip detection
+        male_icon_rect = pygame.Rect(male_icon_x, male_icon_y, icon_size + male_count_surface.get_width() + 5, icon_size)
+        if not hasattr(self, '_icon_rects'):
+            self._icon_rects = {}
+        self._icon_rects['male'] = (male_icon_rect, "Males")
+        
         # Move to next position
         current_x = male_count_x + male_count_surface.get_width() + 15
         
@@ -84,6 +96,10 @@ class HUD:
         female_count_surface = self.font.render(female_count_text, True, WHITE)
         female_count_x = female_icon_x + icon_size + 5
         screen.blit(female_count_surface, (female_count_x, self.bar_height // 2 - female_count_surface.get_height() // 2))
+        
+        # Store female icon position for tooltip detection
+        female_icon_rect = pygame.Rect(female_icon_x, female_icon_y, icon_size + female_count_surface.get_width() + 5, icon_size)
+        self._icon_rects['female'] = (female_icon_rect, "Females")
         
         # Update start position for next element
         self._human_counters_end_x = female_count_x + female_count_surface.get_width() + 15
@@ -123,6 +139,12 @@ class HUD:
         happiness_x = heart_x + heart_size + 5
         screen.blit(happiness_surface, (happiness_x, self.bar_height // 2 - happiness_surface.get_height() // 2))
         
+        # Store happiness icon position for tooltip detection
+        happiness_icon_rect = pygame.Rect(heart_x, heart_y - heart_size // 2, heart_size + happiness_surface.get_width() + 5, heart_size)
+        if not hasattr(self, '_icon_rects'):
+            self._icon_rects = {}
+        self._icon_rects['happiness'] = (happiness_icon_rect, "Happiness")
+        
         # Update end position for resources
         self._happiness_end_x = happiness_x + happiness_surface.get_width() + 15
     
@@ -158,54 +180,53 @@ class HUD:
         for resource_type, label in resources_to_show:
             count = resource_system.get_resource_count(resource_type)
             
-            # Always show resources (even if 0) for LOG, STONE, IRON, SALT
-            if resource_type in [ResourceType.LOG, ResourceType.STONE, ResourceType.IRON, ResourceType.SALT] or count > 0:
-                visual = ResourceVisualizer.get_resource_visual(resource_type)
-                
-                # Draw resource icon (scaled down to fit in HUD)
-                icon_y = (self.bar_height - visual['height']) // 2
-                
-                # Special case: Draw malt as a barrel icon (like in the mill)
-                if resource_type == ResourceType.MALT:
-                    # Draw barrel icon with horizontal bands
-                    barrel_x = current_x
-                    barrel_y = icon_y
-                    barrel_width = visual['width']
-                    barrel_height = visual['height']
-                    # Draw filled barrel rectangle
-                    pygame.draw.rect(screen, visual['color'], 
-                                   (barrel_x, barrel_y, barrel_width, barrel_height))
-                    # Draw barrel outline
-                    pygame.draw.rect(screen, BLACK, (barrel_x, barrel_y, barrel_width, barrel_height), 1)
-                    # Draw top horizontal line (barrel band)
-                    pygame.draw.line(screen, BLACK, (barrel_x, barrel_y + 1), 
-                                   (barrel_x + barrel_width, barrel_y + 1), 1)
-                    # Draw bottom horizontal line (barrel band)
-                    pygame.draw.line(screen, BLACK, (barrel_x, barrel_y + barrel_height - 1), 
-                                   (barrel_x + barrel_width, barrel_y + barrel_height - 1), 1)
-                elif visual['shape'] == 'rect':
-                    # Draw small rectangle icon
-                    pygame.draw.rect(screen, visual['color'], 
-                                   (current_x, icon_y, visual['width'], visual['height']))
-                elif visual['shape'] == 'circle':
-                    radius = visual['width'] // 2
-                    pygame.draw.circle(screen, visual['color'], 
-                                     (current_x + radius, icon_y + radius), radius)
-                
-                # Draw count next to icon
-                count_text = str(count)
-                count_surface = self.font.render(count_text, True, WHITE)
-                count_x = current_x + visual['width'] + 5
-                screen.blit(count_surface, (count_x, self.bar_height // 2 - count_surface.get_height() // 2))
-                
-                # Store icon position for tooltip detection
-                icon_rect = pygame.Rect(current_x, icon_y, visual['width'] + count_surface.get_width() + 5, visual['height'])
-                if not hasattr(self, '_resource_icon_rects'):
-                    self._resource_icon_rects = {}
-                self._resource_icon_rects[resource_type] = (icon_rect, label)
-                
-                # Move to next resource position
-                current_x += visual['width'] + count_surface.get_width() + 20
+            # Always show all resources (even if 0)
+            visual = ResourceVisualizer.get_resource_visual(resource_type)
+            
+            # Draw resource icon (scaled down to fit in HUD)
+            icon_y = (self.bar_height - visual['height']) // 2
+            
+            # Special case: Draw malt as a barrel icon (like in the mill)
+            if resource_type == ResourceType.MALT:
+                # Draw barrel icon with horizontal bands
+                barrel_x = current_x
+                barrel_y = icon_y
+                barrel_width = visual['width']
+                barrel_height = visual['height']
+                # Draw filled barrel rectangle
+                pygame.draw.rect(screen, visual['color'], 
+                               (barrel_x, barrel_y, barrel_width, barrel_height))
+                # Draw barrel outline
+                pygame.draw.rect(screen, BLACK, (barrel_x, barrel_y, barrel_width, barrel_height), 1)
+                # Draw top horizontal line (barrel band)
+                pygame.draw.line(screen, BLACK, (barrel_x, barrel_y + 1), 
+                               (barrel_x + barrel_width, barrel_y + 1), 1)
+                # Draw bottom horizontal line (barrel band)
+                pygame.draw.line(screen, BLACK, (barrel_x, barrel_y + barrel_height - 1), 
+                               (barrel_x + barrel_width, barrel_y + barrel_height - 1), 1)
+            elif visual['shape'] == 'rect':
+                # Draw small rectangle icon
+                pygame.draw.rect(screen, visual['color'], 
+                               (current_x, icon_y, visual['width'], visual['height']))
+            elif visual['shape'] == 'circle':
+                radius = visual['width'] // 2
+                pygame.draw.circle(screen, visual['color'], 
+                                 (current_x + radius, icon_y + radius), radius)
+            
+            # Draw count next to icon
+            count_text = str(count)
+            count_surface = self.font.render(count_text, True, WHITE)
+            count_x = current_x + visual['width'] + 5
+            screen.blit(count_surface, (count_x, self.bar_height // 2 - count_surface.get_height() // 2))
+            
+            # Store icon position for tooltip detection
+            icon_rect = pygame.Rect(current_x, icon_y, visual['width'] + count_surface.get_width() + 5, visual['height'])
+            if not hasattr(self, '_icon_rects'):
+                self._icon_rects = {}
+            self._icon_rects[resource_type] = (icon_rect, label)
+            
+            # Move to next resource position
+            current_x += visual['width'] + count_surface.get_width() + 20
     
     def _draw_day_time(self, screen, day_cycle):
         """Draw year number and current time"""
@@ -218,14 +239,14 @@ class HUD:
         screen.blit(day_surface, (day_x, self.bar_height // 2 - day_rect.height // 2))
     
     def _draw_resource_tooltips(self, screen, resource_system):
-        """Draw tooltips when mouse hovers over resource icons"""
-        if not hasattr(self, '_resource_icon_rects'):
+        """Draw tooltips when mouse hovers over any HUD icon (resources, sheep, humans, happiness)"""
+        if not hasattr(self, '_icon_rects'):
             return
         
         mouse_x, mouse_y = pygame.mouse.get_pos()
         
-        # Check if mouse is over any resource icon
-        for resource_type, (icon_rect, label) in self._resource_icon_rects.items():
+        # Check if mouse is over any icon (resources, sheep, humans, happiness)
+        for icon_key, (icon_rect, label) in self._icon_rects.items():
             if icon_rect.collidepoint(mouse_x, mouse_y):
                 # Draw tooltip above the icon
                 tooltip_font = pygame.font.Font(None, 20)

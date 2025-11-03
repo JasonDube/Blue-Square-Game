@@ -57,7 +57,7 @@ class DayCycleSystem:
             # Handle grass regrowth
             self._regrow_grass(game_state.eaten_pixels)
             
-            # Handle wool regrowth (every 3 game days)
+            # Handle wool regrowth (every day/night cycle)
             self._regrow_wool(game_state)
         
         # Note: elapsed_time continues past day_duration during transition
@@ -130,11 +130,11 @@ class DayCycleSystem:
         return 0  # No overlay needed
     
     def _regrow_wool(self, game_state):
-        """Regrow wool on sheep that were sheared 3 or more days ago"""
+        """Regrow wool on sheep after each day/night cycle (1 day)"""
         for sheep in game_state.sheep_list:
             if not sheep.has_wool and sheep.wool_regrowth_day is not None:
-                # Check if 3 or more days have passed
+                # Regrow after 1 day (each day/night cycle)
                 days_since_sheared = self.current_day - sheep.wool_regrowth_day
-                if days_since_sheared >= 3:
+                if days_since_sheared >= 1:
                     sheep.has_wool = True
                     sheep.wool_regrowth_day = None
