@@ -11,11 +11,8 @@ class Silo:
     def __init__(self, x, y):
         self.x = x
         self.y = y
-        self.radius = 30
-        self.collision_enabled = True
-        self.resource_type = ResourceType.BARLEY
-        self.resource_visualizer = ResourceVisualizer(self, self.resource_type, 3, 3)
-        self.barley_positions = None  # To be calculated once
+        self.radius = SILO_RADIUS
+        self.collision_enabled = False  # Collision disabled for prototype
         self.barley_count = 0  # Per-building resource tracking (starts at 0!)
     
     def is_point_inside(self, px, py):

@@ -12,7 +12,7 @@ class Pen:
         self.x = x
         self.y = y
         self.size = size
-        self.collision_enabled = True
+        self.collision_enabled = False  # Collision disabled for prototype
         self.rotation = rotation  # 0 = top, 1 = right, 2 = bottom, 3 = left
     
     def get_button_pos(self):

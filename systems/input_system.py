@@ -38,6 +38,8 @@ class InputSystem:
             self._handle_escape()
         elif event.key == pygame.K_d:
             self.game_state.debug_mode = not self.game_state.debug_mode
+        elif event.key == pygame.K_r:
+            self.game_state.road_smoothing_mode = not self.game_state.road_smoothing_mode
         elif self.game_state.build_mode:
             self._handle_build_mode_keys(event)
     
@@ -835,115 +837,127 @@ class InputSystem:
                         # Keep build mode active for continuous placement
     
     def _handle_right_click(self, mouse_x, mouse_y):
-        """Handle right click - show context menus"""
-        # Check for selected entities first - player menu takes priority over town hall menu
+        """Handle right click actions"""
+        # Close any open context menus first
+        self._close_all_context_menus()
+        
+        # Priority 1: Resource context menu if a resource is selected
+        if self.game_state.any_resource_selected():
+            self._open_resource_context_menu(mouse_x, mouse_y)
+            return
+            
+        # Priority 2: Entity context menus if units are selected (sheep/humans)
         any_sheep_selected = self.game_state.any_sheep_selected()
         any_male_human_selected = self.game_state.any_male_human_selected()
         any_female_human_selected = self.game_state.any_female_human_selected()
-        any_resource_selected = self.game_state.any_resource_selected()
         
-        # Check if clicking on a town hall
-        clicked_townhall = None
-        if not self.game_state.build_mode:
-            for townhall in self.game_state.townhall_list:
-                if townhall.contains_point(mouse_x, mouse_y):
-                    clicked_townhall = townhall
-                    break
+        if any_sheep_selected or any_male_human_selected or any_female_human_selected:
+            self._open_entity_context_menus(mouse_x, mouse_y, any_sheep_selected, any_male_human_selected, any_female_human_selected)
+            return
+
+        # If no units are selected, check for town hall or empty space
+        # Check for click on Town Hall for Employment Menu
+        town_hall_clicked = False
+        for town_hall in self.game_state.townhall_list:
+            if town_hall.get_bounds().collidepoint(mouse_x, mouse_y):
+                self.employment_menu.show(town_hall, mouse_x, mouse_y)
+                town_hall_clicked = True
+                break
         
-        # If entities are selected AND clicking on a town hall, show player menu instead of employment menu
-        # Or if resources are selected, show resource menu
-        if any_resource_selected:
-            # Show resource context menu
-            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - 50))
-            self.game_state.show_resource_context_menu = True
-            self.game_state.resource_context_menu_x = mouse_x
-            self.game_state.resource_context_menu_y = menu_y
-            # Hide all other menus
-            self.game_state.show_context_menu = False
-            self.game_state.show_male_human_context_menu = False
-            self.game_state.show_female_human_context_menu = False
-            self.game_state.show_player_context_menu = False
-            if self.employment_menu:
-                self.employment_menu.hide()
-        elif (any_sheep_selected or any_male_human_selected or any_female_human_selected) and clicked_townhall:
-            # Show player context menu - clamp to playable area
-            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - 284))
-            self.game_state.show_context_menu = False
-            self.game_state.show_male_human_context_menu = False
-            self.game_state.show_female_human_context_menu = False
-            self.game_state.show_player_context_menu = True
-            self.game_state.player_context_menu_x = mouse_x
-            self.game_state.player_context_menu_y = menu_y
-            
-            # Hide employment menu when entities are selected (player menu takes priority)
-            if self.employment_menu:
-                self.employment_menu.hide()
-        elif any_sheep_selected or any_male_human_selected or any_female_human_selected:
-            # Entities selected but NOT clicking on town hall - show entity menus as normal
-            # Calculate how many menus we'll show
-            current_x_offset = mouse_x
-            
-            # Calculate maximum menu height (in case Auto option and Fire option appear)
-            max_menu_height = 147  # Maximum height: base menu (120) + fire option (27)
-            
-            # Clamp menu Y position to playable area
-            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - max_menu_height))
-            
-            # Show sheep menu if sheep selected
-            if any_sheep_selected:
-                self.game_state.show_context_menu = True
-                self.game_state.context_menu_x = current_x_offset
-                self.game_state.context_menu_y = menu_y
-                current_x_offset += 145  # Width of sheep menu + spacing
-            else:
-                self.game_state.show_context_menu = False
-            
-            # Show male human menu if male humans selected
-            if any_male_human_selected:
-                self.game_state.show_male_human_context_menu = True
-                self.game_state.male_human_context_menu_x = current_x_offset
-                self.game_state.male_human_context_menu_y = menu_y
-                current_x_offset += 125  # Width of human menu + spacing
-            else:
-                self.game_state.show_male_human_context_menu = False
-            
-            # Show female human menu if female humans selected
-            if any_female_human_selected:
-                self.game_state.show_female_human_context_menu = True
-                self.game_state.female_human_context_menu_x = current_x_offset
-                self.game_state.female_human_context_menu_y = menu_y
-            else:
-                self.game_state.show_female_human_context_menu = False
-            
-            self.game_state.show_player_context_menu = False
-            
-            # Hide employment menu when showing entity menus
-            if self.employment_menu:
-                self.employment_menu.hide()
+        # If not clicking on a town hall, open the general build menu
+        if not town_hall_clicked:
+            self._open_player_context_menu(mouse_x, mouse_y)
+
+    def _close_all_context_menus(self):
+        """Close all open context menus"""
+        self.game_state.show_context_menu = False
+        self.game_state.show_male_human_context_menu = False
+        self.game_state.show_female_human_context_menu = False
+        self.game_state.show_player_context_menu = False
+        self.game_state.show_resource_context_menu = False
+        if self.employment_menu:
+            self.employment_menu.hide()
+    
+    def _open_resource_context_menu(self, mx, my):
+        """Open the resource context menu"""
+        context_menu_width = 120
+        context_menu_height = 40
+        x = mx
+        y = max(PLAYABLE_AREA_TOP + 5, min(my, PLAYABLE_AREA_BOTTOM - 50))
+        
+        self.game_state.show_resource_context_menu = True
+        self.game_state.resource_context_menu_x = x
+        self.game_state.resource_context_menu_y = y
+        
+        # Hide all other menus
+        self.game_state.show_context_menu = False
+        self.game_state.show_male_human_context_menu = False
+        self.game_state.show_female_human_context_menu = False
+        self.game_state.show_player_context_menu = False
+        if self.employment_menu:
+            self.employment_menu.hide()
+    
+    def _open_entity_context_menus(self, mx, my, show_sheep, show_male, show_female):
+        """Open entity-specific context menus (sheep/human menus)"""
+        current_x_offset = mx
+        
+        # Calculate maximum menu height (in case Auto option and Fire option appear)
+        max_menu_height = 147  # Maximum height: base menu (120) + fire option (27)
+        
+        # Clamp menu Y position to playable area
+        menu_y = max(PLAYABLE_AREA_TOP + 5, min(my, PLAYABLE_AREA_BOTTOM - max_menu_height))
+        
+        # Show sheep menu if sheep selected
+        if show_sheep:
+            self.game_state.show_context_menu = True
+            self.game_state.context_menu_x = current_x_offset
+            self.game_state.context_menu_y = menu_y
+            current_x_offset += 145  # Width of sheep menu + spacing
         else:
-            # No entities selected - check if clicking on a town hall for employment menu
-            if not self.game_state.build_mode and clicked_townhall and self.employment_menu:
-                # Show employment menu for this town hall (only when no entities are selected)
-                self.employment_menu.show(clicked_townhall, mouse_x, mouse_y)
-                # Hide all other context menus
-                self.game_state.show_context_menu = False
-                self.game_state.show_male_human_context_menu = False
-                self.game_state.show_female_human_context_menu = False
-                self.game_state.show_player_context_menu = False
-                return
-            
-            # Show player context menu - clamp to playable area
-            menu_y = max(PLAYABLE_AREA_TOP + 5, min(mouse_y, PLAYABLE_AREA_BOTTOM - 284))
             self.game_state.show_context_menu = False
+        
+        # Show male human menu if male humans selected
+        if show_male:
+            self.game_state.show_male_human_context_menu = True
+            self.game_state.male_human_context_menu_x = current_x_offset
+            self.game_state.male_human_context_menu_y = menu_y
+            current_x_offset += 125  # Width of human menu + spacing
+        else:
             self.game_state.show_male_human_context_menu = False
+        
+        # Show female human menu if female humans selected
+        if show_female:
+            self.game_state.show_female_human_context_menu = True
+            self.game_state.female_human_context_menu_x = current_x_offset
+            self.game_state.female_human_context_menu_y = menu_y
+        else:
             self.game_state.show_female_human_context_menu = False
-            self.game_state.show_player_context_menu = True
-            self.game_state.player_context_menu_x = mouse_x
-            self.game_state.player_context_menu_y = menu_y
-            
-            # Hide employment menu when showing player menu
-            if self.employment_menu:
-                self.employment_menu.hide()
+        
+        # Hide build menu and other menus
+        self.game_state.show_player_context_menu = False
+        self.game_state.show_resource_context_menu = False
+        if self.employment_menu:
+            self.employment_menu.hide()
+    
+    def _open_player_context_menu(self, mx, my):
+        """Open the player context menu (general build menu)"""
+        context_menu_width = 160
+        num_build_options = 12
+        context_menu_height = num_build_options * 27  # Height without fire section
+        x = mx
+        y = max(PLAYABLE_AREA_TOP + 5, min(my, PLAYABLE_AREA_BOTTOM - 284))
+        
+        self.game_state.show_player_context_menu = True
+        self.game_state.player_context_menu_x = x
+        self.game_state.player_context_menu_y = y
+        
+        # Hide all other menus
+        self.game_state.show_context_menu = False
+        self.game_state.show_male_human_context_menu = False
+        self.game_state.show_female_human_context_menu = False
+        self.game_state.show_resource_context_menu = False
+        if self.employment_menu:
+            self.employment_menu.hide()
     
     def _handle_mouse_up(self, event):
         """Handle mouse button release"""

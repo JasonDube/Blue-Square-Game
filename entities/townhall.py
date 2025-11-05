@@ -19,7 +19,7 @@ class TownHall:
         else:
             self.width = TOWNHALL_WIDTH
             self.height = TOWNHALL_HEIGHT
-        self.collision_enabled = False  # Passable for testing purposes
+        self.collision_enabled = False  # Collision disabled for prototype
         
         # Employment tracking
         self.employed_humans = []  # List of humans employed at this town hall
@@ -113,9 +113,13 @@ class TownHall:
         return True
     
     def contains_point(self, px, py):
-        """Check if a point is inside the town hall"""
-        return (self.x <= px <= self.x + self.width and 
+        """Check if a point is within the town hall's bounds"""
+        return (self.x <= px <= self.x + self.width and
                 self.y <= py <= self.y + self.height)
+
+    def get_bounds(self):
+        """Get the bounding box for collision detection"""
+        return pygame.Rect(self.x, self.y, self.width, self.height)
     
     def get_bench_rect(self):
         """Get the rectangle for the bench on the front side of the town hall"""

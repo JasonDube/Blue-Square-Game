@@ -19,7 +19,7 @@ class LumberYard:
         else:
             self.width = LUMBERYARD_WIDTH
             self.height = LUMBERYARD_HEIGHT
-        self.collision_enabled = True
+        self.collision_enabled = False  # Collision disabled for prototype
         self.log_count = 0  # Per-building resource tracking (starts at 0!)
     
     def get_button_pos(self):

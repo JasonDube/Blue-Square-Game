@@ -48,6 +48,13 @@ class Human:
         self.wander_target_y = None  # Target y position for wandering
         self.is_wandering = False  # Whether currently moving or stopped
         
+        # Road path for movement and debug visualization
+        self.road_path = []  # List of road segments in the current path
+        self.current_road_index = 0  # Index of current road segment in the path
+        self.start_road = None  # Closest road to current position (labeled 's')
+        self.target_road = None  # Closest road to target (labeled 't')
+        self.pathing_target_pos = None # The final (x, y) destination for the current path
+        
         # Sleep attributes
         self.sleep_target = None  # Building to sleep in (hut if available, otherwise townhall)
         self.has_home = False  # Whether human has a dedicated home (hut)
@@ -62,9 +69,6 @@ class Human:
         self.downtime_wander_timer = 0.0  # Timer for downtime wandering
         self.downtime_target_x = None  # Target x for downtime wandering
         self.downtime_target_y = None  # Target y for downtime wandering
-        
-        # Pathfinding state tracking
-        self.previous_road = None  # The road segment we were previously on (to prevent oscillation)
     
     def update_happiness(self, dt, game_state):
         """Update happiness based on employment, home status, and hunger"""

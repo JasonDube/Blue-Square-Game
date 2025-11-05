@@ -19,7 +19,7 @@ class IronYard:
         else:
             self.width = IRONYARD_WIDTH
             self.height = IRONYARD_HEIGHT
-        self.collision_enabled = True
+        self.collision_enabled = False  # Collision disabled for prototype
         self.iron_count = 0  # Per-building resource tracking
     
     def get_button_pos(self):

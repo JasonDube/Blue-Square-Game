@@ -41,6 +41,7 @@ class GameState:
         
         # UI state
         self.debug_mode = False
+        self.road_smoothing_mode = False  # Visual smoothing for road corners (pressing 'r')
         self.build_mode = False
         self.build_mode_type = None  # "pen", "townhall", "lumberyard", "stoneyard", "ironyard", "saltyard", "woolshed", "barleyfarm", "silo", "mill", "hut", "road"
         self.pen_rotation = 0  # 0 = top, 1 = right, 2 = bottom, 3 = left

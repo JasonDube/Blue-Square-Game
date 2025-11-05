@@ -19,7 +19,7 @@ class BarleyFarm:
         else:
             self.width = BARLEYFARM_WIDTH
             self.height = BARLEYFARM_HEIGHT
-        self.collision_enabled = True
+        self.collision_enabled = False  # Collision disabled for prototype
         
         # Crop growth tracking
         self.planted_day = None  # Day when crops were planted (None if not planted)
